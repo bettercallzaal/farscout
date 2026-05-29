@@ -47,6 +47,44 @@ test('runCycle returns empty on empty corpus', async () => {
   assert.equal(asked, false);
 });
 
+test('runCycle coerces object-shaped findings to strings', async () => {
+  const reader = { userCasts: async () => [{ text: 'building miniapps' }], channelFeed: async () => [] };
+  const pushed = [];
+  const memory = { isKnown: () => false, remember: () => {}, pushEpisode: async (t) => { pushed.push(t); return true; } };
+  let asked = 0;
+  const brain = {
+    ask: async () => {
+      asked += 1;
+      if (asked === 1) return JSON.stringify({ topics: ['Mini Apps', '!!!'] });
+      return JSON.stringify({
+        findings: [{ title: 'SIWF v2', detail: 'shipped' }, 'plain string fact'],
+        questions: [{ question: 'Which client?' }],
+      });
+    },
+  };
+  const out = await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
+  assert.ok(out.findings.every((f) => typeof f === 'string'));
+  assert.ok(!out.findings.some((f) => f.includes('[object Object]')));
+  assert.equal(out.questions[0], 'Which client?');
+  assert.ok(!pushed.some((p) => p.includes('[object Object]')));
+});
+
+test('runCycle slugifies messy topics and drops junk', async () => {
+  const reader = { userCasts: async () => [{ text: 'x' }], channelFeed: async () => [] };
+  const remembered = [];
+  const memory = { isKnown: () => false, remember: (k) => remembered.push(k), pushEpisode: async () => true };
+  let asked = 0;
+  const brain = {
+    ask: async () => {
+      asked += 1;
+      if (asked === 1) return JSON.stringify({ topics: ['Farcaster Snaps', 'a', '!!!'] });
+      return JSON.stringify({ findings: ['ok'], questions: [] });
+    },
+  };
+  await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
+  assert.deepEqual(remembered, ['farcaster-snaps']); // 'a' too short, '!!!' empty after slug
+});
+
 test('runCycle caps questions at 2', async () => {
   const reader = { userCasts: async () => [{ text: 'a' }], channelFeed: async () => [] };
   const memory = { isKnown: () => false, remember: () => {}, pushEpisode: async () => true };
