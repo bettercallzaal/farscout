@@ -22,8 +22,14 @@ test('fail-open: returns findings unchanged on brain error', async () => {
   assert.deepEqual(out, ['a', 'b']);
 });
 
-test('never zeroes everything out (all-contradicted glitch keeps originals)', async () => {
+test('honors a real all-contradicted verdict by dropping (sources disagreed)', async () => {
   const brain = { ask: async () => JSON.stringify({ verdicts: [{ i: 1, label: 'contradicted' }] }) };
   const out = await verifyFindings({ brain, findings: ['only one (u1)'], sourceBlock: 's' });
-  assert.deepEqual(out, ['only one (u1)']);
+  assert.deepEqual(out, []);
+});
+
+test('malformed/empty verdicts fail-open (keep originals, not a real contradiction)', async () => {
+  const brain = { ask: async () => '{"verdicts":[]}' };
+  const out = await verifyFindings({ brain, findings: ['a (u1)', 'b (u2)'], sourceBlock: 's' });
+  assert.deepEqual(out, ['a (u1)', 'b (u2)']);
 });
