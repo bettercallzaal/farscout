@@ -29,6 +29,31 @@ test('isKnown fuzzy-collapses reorderings/plurals but keeps narrower subtopics',
   assert.equal(mem.isKnown('mini-apps-payments-auth'), false); // narrower subtopic stays researchable (#6)
 });
 
+test('recordMention tracks count + storylines surface recurring topics (#4)', async () => {
+  let t = 1_000_000_000_000;
+  const mem = makeMemory({ file: tmpFile(), fetchImpl: async () => ({ ok: true }), now: () => t });
+  await mem.load();
+  for (let i = 0; i < 3; i += 1) { mem.recordMention('clanker'); t += 86400000; } // 3 days
+  mem.recordMention('one-off');
+  const info = mem.mentionInfo('clanker');
+  assert.equal(info.count, 3);
+  const arcs = mem.storylines();
+  assert.equal(arcs.length, 1); // only clanker hits STORYLINE_MIN=3
+  assert.equal(arcs[0].label, 'clanker');
+  assert.equal(arcs[0].count, 3);
+});
+
+test('recency decay: a topic last seen beyond the window is novel again (#4)', async () => {
+  let t = 1_000_000_000_000;
+  const mem = makeMemory({ file: tmpFile(), fetchImpl: async () => ({ ok: true }), now: () => t });
+  await mem.load();
+  mem.remember('old-topic');
+  mem.recordMention('old-topic');
+  assert.equal(mem.isKnown('old-topic'), true);
+  t += 40 * 86400000; // 40 days later, past the 30d window
+  assert.equal(mem.isKnown('old-topic'), false);
+});
+
 test('pushEpisode posts real bonfire contract on success', async () => {
   let body;
   let url;

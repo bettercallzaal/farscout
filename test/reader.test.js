@@ -1,8 +1,37 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeReader, normalizeCast, castWeight } from '../lib/reader.js';
+import { makeReader, normalizeCast, normalizeHubCast, castWeight } from '../lib/reader.js';
 
 const wc = (casts) => ({ ok: true, json: async () => ({ result: { casts } }) });
+
+test('hub fallback: userCasts uses hubUrl when Warpcast returns nothing (#6)', async () => {
+  const seen = [];
+  const fetchImpl = async (url) => {
+    seen.push(url);
+    if (url.includes('api.warpcast.com')) return wc([]); // warpcast empty
+    return { ok: true, json: async () => ({ messages: [{ hash: '0xh', data: { fid: 3, timestamp: 1, castAddBody: { text: 'from hub', embeds: [] } } }] }) };
+  };
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '3', fetchImpl, hubUrl: 'https://hub.test' });
+  const casts = await reader.userCasts(5);
+  assert.equal(casts[0].text, 'from hub');
+  assert.ok(seen.some((u) => u.includes('hub.test/v1/castsByFid')));
+});
+
+test('hub fallback is off by default (no hubUrl -> no extra fetch)', async () => {
+  let hubHit = false;
+  const fetchImpl = async (url) => { if (url.includes('castsByFid')) hubHit = true; return wc([]); };
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '3', fetchImpl });
+  assert.deepEqual(await reader.userCasts(5), []);
+  assert.equal(hubHit, false);
+});
+
+test('normalizeHubCast maps protobuf-json shape + extracts embeds', () => {
+  const c = normalizeHubCast({ hash: '0x1', data: { fid: 99, timestamp: 123, castAddBody: { text: 'gm https://x.io', embeds: [{ url: 'https://e.io' }] } } });
+  assert.equal(c.text, 'gm https://x.io');
+  assert.equal(c.author, 99);
+  assert.ok(c.embeds.includes('https://e.io'));
+  assert.ok(c.embeds.includes('https://x.io'));
+});
 
 test('userCasts hits Warpcast /v2/casts and parses result.casts', async () => {
   let seen;

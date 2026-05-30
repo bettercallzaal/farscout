@@ -47,7 +47,7 @@ export function formatResult(result = {}) {
 async function main() {
   requireConfig();
 
-  const reader = makeReader({ base: config.haatzBase, fid: config.fid, fetchImpl: fetch, neynarKey: config.neynarKey });
+  const reader = makeReader({ base: config.haatzBase, fid: config.fid, fetchImpl: fetch, neynarKey: config.neynarKey, hubUrl: config.hubUrl });
   const brain = makeBrain({
     openrouterKey: config.openrouterKey,
     freeModels: config.freeModels,
@@ -73,10 +73,22 @@ async function main() {
   state.digestLog ??= [];
   state.lastDigestAt ??= Date.now();
 
+  // Weekly storyline rollup (#5): lead with the topics that recurred across the
+  // window (the arcs), then the raw recent findings.
   async function sendDigest() {
     if (!state.digestLog.length) return;
+    const parts = [];
+    const arcs = memory.storylines ? memory.storylines() : [];
+    if (arcs.length) {
+      const arcLines = arcs.slice(0, 8).map((a) => {
+        const days = a.first && a.last ? Math.max(1, Math.round((a.last - a.first) / 86400000)) : 0;
+        return `- ${a.label}: ${a.count}x${days ? ` over ${days}d` : ''}`;
+      });
+      parts.push(`Storylines (recurring this period):\n${arcLines.join('\n')}`);
+    }
     const lines = state.digestLog.slice(-25).map((d) => `- ${d}`);
-    await discord.deliver(`Weekly digest - what farscout learned:\n${lines.join('\n')}`);
+    parts.push(`What farscout learned:\n${lines.join('\n')}`);
+    await discord.deliver(`Weekly digest\n\n${parts.join('\n\n')}`);
   }
 
   const discord = makeDiscord({
@@ -100,7 +112,7 @@ async function main() {
           return;
         }
         await discord.deliver(`Digging into "${topic}"...`);
-        const res = await researchTopic({ brain, search, topic, enrich });
+        const res = await researchTopic({ brain, search, topic, enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
         const msg = formatResult(res);
         await discord.deliver(msg || `Nothing solid found for "${topic}" (no usable sources).`);
       } else if (cmd === 'digest') {
@@ -126,6 +138,9 @@ async function main() {
         watchFids: config.watchFids,
         standingTopics: config.standingTopics,
         recentReplies: discord.recentReplies(),
+        perspectives: config.perspectives,
+        reflect: config.reflect,
+        verify: config.verify,
       });
       const msg = formatResult(out);
       if (msg) {

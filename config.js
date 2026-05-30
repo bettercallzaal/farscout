@@ -18,6 +18,11 @@ export const config = {
   // Free, no-auth Warpcast public API. (HAATZ_BASE kept for back-compat override.)
   haatzBase: process.env.FARCASTER_API_BASE || process.env.HAATZ_BASE || 'https://api.warpcast.com',
   neynarKey: process.env.NEYNAR_API_KEY || '',
+  hubUrl: process.env.HUB_URL || '', // optional public Farcaster hub fallback (#6)
+  // Research depth toggles (#1/#2/#3) - all free, default on for the live loop.
+  perspectives: process.env.PERSPECTIVES !== '0',
+  reflect: process.env.REFLECT !== '0',
+  verify: process.env.VERIFY !== '0',
   exaKey: process.env.EXA_API_KEY || '',
   bonfireKey: process.env.BONFIRE_API_KEY,
   bonfireId: process.env.BONFIRE_ID,
