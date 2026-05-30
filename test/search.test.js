@@ -42,6 +42,25 @@ test('fetchUrl detects a mini app frame', async () => {
   assert.equal(r.frame.title, 'My App');
 });
 
+test('fetchUrl blocks SSRF targets without fetching', async () => {
+  let called = false;
+  const fetchImpl = async () => { called = true; return okJson({}); };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  const r = await search.fetchUrl('http://169.254.169.254/latest/meta-data/');
+  assert.equal(r.status, 'BLOCKED');
+  assert.equal(called, false);
+});
+
+test('duckSearch parses results when href precedes class', async () => {
+  const html = '<a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.farcaster.xyz%2Fframes" class="result__a">Frames docs</a>';
+  const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => html });
+  const search = makeSearch({ base: 'https://h.test', fetchImpl }); // no exaKey -> duck path
+  const hits = await search.webSearch('frames');
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].url, 'https://docs.farcaster.xyz/frames');
+  assert.equal(hits[0].title, 'Frames docs');
+});
+
 test('detectFrame returns null for plain pages', () => {
   assert.equal(detectFrame('<html><body>hi</body></html>'), null);
 });

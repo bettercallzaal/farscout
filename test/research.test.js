@@ -60,6 +60,23 @@ test('researchTopic drops findings with no usable sources', async () => {
   assert.deepEqual(out.findings, []);
 });
 
+test('researchTopic drops a finding whose cite is missing or out of range', async () => {
+  const search = fakeSearch({ web: [{ title: 's', url: 'https://real.dev', snippet: 'x', source: 'web' }] });
+  const brain = {
+    ask: async () => JSON.stringify({
+      findings: [
+        { text: 'no cite finding' }, // no cite -> dropped
+        { text: 'bad cite finding', cite: 9 }, // out of range -> dropped
+        { text: 'good finding', cite: 1 }, // valid -> kept with source
+      ],
+      questions: [],
+    }),
+  };
+  const out = await researchTopic({ brain, search, topic: 't' });
+  assert.equal(out.findings.length, 1);
+  assert.match(out.findings[0], /good finding \(https:\/\/real\.dev\)/);
+});
+
 test('researchTopic surfaces detected mini apps as frames', async () => {
   const search = fakeSearch({
     web: [{ title: 'app', url: 'https://app.xyz', snippet: 's', source: 'web' }],
