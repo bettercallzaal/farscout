@@ -11,11 +11,17 @@ export const config = {
   ollamaModel: process.env.OLLAMA_MODEL || 'llama3.1',
   fid: process.env.FARCASTER_FID,
   watchChannels: list(process.env.WATCH_CHANNELS),
+  watchFids: list(process.env.WATCH_FIDS),
+  standingTopics: list(process.env.STANDING_TOPICS).length
+    ? list(process.env.STANDING_TOPICS)
+    : ['farcaster-mini-apps', 'farcaster-frames-v2', 'farcaster-snaps'],
   haatzBase: process.env.HAATZ_BASE || 'https://haatz.quilibrium.com',
   neynarKey: process.env.NEYNAR_API_KEY || '',
+  exaKey: process.env.EXA_API_KEY || '',
   bonfireKey: process.env.BONFIRE_API_KEY,
   bonfireId: process.env.BONFIRE_ID,
   bonfireBase: process.env.BONFIRE_API_URL || 'https://tnt-v2.api.bonfires.ai',
+  digestIntervalMs: Number(process.env.DIGEST_INTERVAL_MS) || 7 * 24 * 60 * 60 * 1000,
 };
 
 export function requireConfig() {
