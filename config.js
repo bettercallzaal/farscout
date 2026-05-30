@@ -26,9 +26,18 @@ export const config = {
 };
 
 export function requireConfig() {
-  const missing = ['discordToken', 'discordUserId', 'openrouterKey', 'fid', 'bonfireKey', 'bonfireId']
+  const missing = ['discordToken', 'discordUserId', 'fid', 'bonfireKey', 'bonfireId']
     .filter((k) => !config[k]);
   if (missing.length) throw new Error(`Missing config: ${missing.join(', ')}`);
-  if (!config.freeModels.length) throw new Error('FREE_MODEL_IDS must list at least one model');
+  // Reasoning backend: a local/remote Ollama OR OpenRouter cloud. On the mac you
+  // can run Ollama-only with no OpenRouter key; on a server set OpenRouter + models.
+  if (!config.ollamaUrl) {
+    if (!config.openrouterKey) {
+      throw new Error('Set OLLAMA_TUNNEL_URL (local Ollama) or OPENROUTER_API_KEY (cloud)');
+    }
+    if (!config.freeModels.length) {
+      throw new Error('OPENROUTER_API_KEY set but FREE_MODEL_IDS is empty - list at least one model');
+    }
+  }
   return config;
 }
