@@ -2,3 +2,10 @@ node_modules/
 state/*.json
 .env
 *.log
+.disc-debug.mjs
+.bsmoke.mjs
+.probe*.mjs
+.p*.mjs
+.pe.mjs
+# scratch debug scripts
+.[a-z]*.mjs
