@@ -29,7 +29,10 @@ export async function saveCadence(file, obj) {
 
 // Render a cycle result into a Discord message: sourced findings, mini-app
 // callouts (#2/#6), questions. Returns null when there is nothing to say.
-export function formatResult({ findings = [], questions = [], frames = [] }) {
+export function formatResult(result = {}) {
+  const findings = result.findings ?? [];
+  const questions = result.questions ?? [];
+  const frames = result.frames ?? [];
   const parts = [];
   if (findings.length) parts.push(`Found:\n- ${findings.join('\n- ')}`);
   if (frames.length) {
@@ -89,9 +92,9 @@ async function main() {
         await discord.deliver('Running a cycle now...');
         await tick();
       } else if (cmd === 'dig') {
-        const topic = rest.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const topic = rest.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
         if (!topic) {
-          await discord.deliver('usage: /dig <topic>');
+          await discord.deliver('usage: /dig <topic> (max 60 chars)');
           return;
         }
         await discord.deliver(`Digging into "${topic}"...`);
@@ -127,6 +130,7 @@ async function main() {
         discord.clearReplies();
       }
       state.digestLog.push(...out.findings); // accumulate for weekly digest (#6)
+    if (state.digestLog.length > 1000) state.digestLog = state.digestLog.slice(-1000); // bound state file
       if (Date.now() - state.lastDigestAt >= config.digestIntervalMs && state.digestLog.length) {
         await sendDigest();
         state.digestLog = [];

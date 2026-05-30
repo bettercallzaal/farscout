@@ -44,6 +44,15 @@ test('isPublicHttpUrl blocks SSRF targets', () => {
     'file:///etc/passwd',
     'ftp://example.com/x',
     'not a url',
+    // encoding bypasses
+    'http://2130706433/',          // decimal 127.0.0.1
+    'http://0x7f.0.0.1/',          // hex octet
+    'http://0177.0.0.1/',          // octal octet
+    'http://127.1/',               // short inet_aton form
+    'http://[::ffff:127.0.0.1]/',  // IPv4-mapped IPv6
+    'http://[::ffff:7f00:1]/',     // IPv4-mapped (hex) IPv6
+    'http://localhost./',          // trailing-dot FQDN
+    'http://user@169.254.169.254/',// userinfo trick
   ]) {
     assert.equal(isPublicHttpUrl(bad), false, bad);
   }
