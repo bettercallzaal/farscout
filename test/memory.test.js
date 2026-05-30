@@ -17,6 +17,18 @@ test('isKnown false then true after remember', async () => {
   assert.equal(mem.isKnown('miniapp-auth'), true);
 });
 
+test('isKnown fuzzy-collapses reorderings/plurals but keeps narrower subtopics', async () => {
+  const mem = makeMemory({ file: tmpFile(), fetchImpl: async () => ({ ok: true }) });
+  await mem.load();
+  mem.remember('mini-apps');
+  assert.equal(mem.isKnown('miniapp'), true); // canonical collapse
+  mem.remember('farcaster-frames-v2');
+  assert.equal(mem.isKnown('frames-v2-farcaster'), true); // reordering -> overlap ~1.0
+  assert.equal(mem.isKnown('lens-protocol'), false); // unrelated stays novel
+  mem.remember('mini-apps-payments');
+  assert.equal(mem.isKnown('mini-apps-payments-auth'), false); // narrower subtopic stays researchable (#6)
+});
+
 test('pushEpisode posts real bonfire contract on success', async () => {
   let body;
   let url;
