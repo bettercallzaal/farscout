@@ -82,22 +82,26 @@ async function main() {
     return followsCache;
   }
 
+  // `say` routes a reply to the right surface: a slash-command interaction when
+  // invoked via slash, else a proactive DM. Defaults to DM for autonomous output.
+  const dm = (t) => discord.deliver(t);
+
   // Flagship: curated daily brief from the accounts you follow.
-  async function sendBrief() {
+  async function sendBrief(say = dm) {
     const follows = await ensureFollows();
     if (!follows.length) {
-      await discord.deliver('No follows loaded - brief needs your FARCASTER_FID follow graph (free).');
+      await say('No follows loaded - brief needs your FARCASTER_FID follow graph (free).');
       return;
     }
     const b = await buildBrief({ reader, brain, follows, cursor: state.briefCursor, max: 5 });
     state.briefCursor = b.nextCursor;
     await saveCadence(CADENCE_FILE, state);
-    await discord.deliver(b.text || `No brief this round (${b.reason || 'thin signal'}). Try again - it rotates through different follows each run.`);
+    await say(b.text || `No brief this round (${b.reason || 'thin signal'}). Try again - it rotates through different follows each run.`);
   }
 
   // Weekly storyline rollup (#5): lead with the topics that recurred across the
   // window (the arcs), then the raw recent findings.
-  async function sendDigest() {
+  async function sendDigest(say = dm) {
     if (!state.digestLog.length) return;
     const parts = [];
     const arcs = memory.storylines ? memory.storylines() : [];
@@ -110,58 +114,55 @@ async function main() {
     }
     const lines = state.digestLog.slice(-25).map((d) => `- ${d}`);
     parts.push(`What farscout learned:\n${lines.join('\n')}`);
-    await discord.deliver(`Weekly digest\n\n${parts.join('\n\n')}`);
+    await say(`Weekly digest\n\n${parts.join('\n\n')}`);
   }
 
   const discord = makeDiscord({
     token: config.discordToken,
     userId: config.discordUserId,
-    onCommand: async (cmd, rest = '') => {
+    // say routes the reply to the slash interaction (if any) else DM.
+    onCommand: async (cmd, rest = '', say = dm) => {
       if (cmd === 'pause') {
         paused = true;
-        await discord.deliver('Paused. /resume to continue.');
+        await say('Paused. /resume to continue.');
       } else if (cmd === 'resume') {
         paused = false;
-        await discord.deliver('Resumed.');
+        await say('Resumed.');
         schedule();
       } else if (cmd === 'now') {
-        await discord.deliver('Running a cycle now...');
-        await tick();
+        await say('Running a cycle now...');
+        await tick(say);
       } else if (cmd === 'dig') {
         const topic = rest.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
         if (!topic) {
-          await discord.deliver('usage: /dig <topic> (max 60 chars)');
+          await say('usage: /dig <topic>');
           return;
         }
-        await discord.deliver(`Digging into "${topic}"...`);
+        await say(`Digging into "${topic}"...`);
         const res = await researchTopic({ brain, search, topic, enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
-        const msg = formatResult(res);
-        await discord.deliver(msg || `Nothing solid found for "${topic}" (no usable sources).`);
+        await say(formatResult(res) || `Nothing solid found for "${topic}" (no usable sources).`);
       } else if (cmd === 'digest') {
-        await sendDigest();
-        if (!state.digestLog.length) await discord.deliver('Nothing logged yet.');
+        if (!state.digestLog.length) { await say('Nothing logged yet.'); return; }
+        await sendDigest(say);
       } else if (cmd === 'brief') {
-        await discord.deliver('Curating your network brief...');
-        await sendBrief();
+        await say('Curating your network brief...');
+        await sendBrief(say);
       } else if (cmd === 'ask') {
         const q = rest.trim().slice(0, 200);
         if (!q) {
-          await discord.deliver('usage: /ask <question>');
+          await say('usage: /ask <question>');
           return;
         }
-        await discord.deliver(`Looking into: "${q}"...`);
-        const topic = q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+        await say(`Looking into: "${q}"...`);
         const res = await researchTopic({ brain, search, topic: q, seedUrls: [], enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
-        void topic;
-        const msg = formatResult(res);
-        await discord.deliver(msg || `No grounded answer for "${q}" (no usable sources).`);
+        await say(formatResult(res) || `No grounded answer for "${q}" (no usable sources).`);
       } else {
-        await discord.deliver(`Unknown command /${cmd}. Try /brief, /ask <q>, /now, /dig <topic>, /digest, /pause, /resume.`);
+        await say(`Unknown command /${cmd}. Try /brief, /ask, /now, /dig, /digest, /pause, /resume.`);
       }
     },
   });
 
-  async function tick() {
+  async function tick(say = dm) {
     if (paused) return;
     try {
       await memory.flushQueue();
@@ -181,8 +182,10 @@ async function main() {
       });
       const msg = formatResult(out);
       if (msg) {
-        await discord.deliver(msg);
+        await say(msg);
         discord.clearReplies();
+      } else if (say !== dm) {
+        await say('Cycle ran - nothing new to report.');
       }
       state.digestLog.push(...out.findings); // accumulate for weekly digest (#6)
     if (state.digestLog.length > 1000) state.digestLog = state.digestLog.slice(-1000); // bound state file
