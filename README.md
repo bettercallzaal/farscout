@@ -2,7 +2,7 @@
 
 A free, mostly-autonomous Farcaster research scout for the ZAO ecosystem.
 
-It reads Farcaster (your casts, watch-channels, trending, mentions, and watched builders) via the free the Warpcast API API, grounds every topic in real sources (Farcaster cast search + web search) before reasoning with OpenRouter free-tier models (routing heavy or private work to a local Mac Ollama when reachable), remembers what it learns in the ZABAL Bonfire knowledge graph, and talks with you in Discord on an engagement-scaled cadence: the more you reply, the faster it comes back; go quiet and it idles toward once a day.
+It reads Farcaster (your casts and watched builders via the free, no-auth Warpcast API; channels too when a free Neynar key is set), grounds every topic in real sources (Farcaster cast search + web search) before reasoning with OpenRouter free-tier models (routing heavy or private work to a local Mac Ollama when reachable), remembers what it learns in the ZABAL Bonfire knowledge graph, and talks with you in Discord on an engagement-scaled cadence: the more you reply, the faster it comes back; go quiet and it idles toward once a day.
 
 Findings are grounded in real sources, never the model's stale memory - a finding that cannot cite a source URL is dropped. It has a standing watch on Farcaster Mini Apps, Frames, and Snaps, and surfaces Mini Apps / Frames it spots in casts.
 
@@ -55,7 +55,7 @@ npm start              # run the live loop
 | `STANDING_TOPICS` | Always-researched topics. Defaults to `farcaster-mini-apps,farcaster-frames-v2,farcaster-snaps`. |
 | `BONFIRE_API_KEY`, `BONFIRE_ID` | From `~/.zao/zao.env` (`BONFIRE_API_KEY`, `BONFIRE_ID`). |
 | `OLLAMA_TUNNEL_URL` | Optional. Public URL of your Mac's Ollama (e.g. a cloudflared/ngrok tunnel to `:11434`). Leave blank to stay all-cloud. |
-| `NEYNAR_API_KEY` | Optional read + cast-search failover; also the path to v2 writes later. |
+| `NEYNAR_API_KEY` | Optional (free tier). Enables `WATCH_CHANNELS` reads (Warpcast has no free channel feed); also the path to v2 writes later. Without it, channels are skipped and the scout runs on your casts + watched FIDs + standing topics. |
 | `EXA_API_KEY` | Optional. Better web grounding via Exa. Blank = free DuckDuckGo. |
 | `DIGEST_INTERVAL_MS` | Optional. Weekly digest cadence (default 7 days). |
 
