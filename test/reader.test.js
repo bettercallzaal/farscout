@@ -4,6 +4,26 @@ import { makeReader, normalizeCast, normalizeHubCast, castWeight } from '../lib/
 
 const wc = (casts) => ({ ok: true, json: async () => ({ result: { casts } }) });
 
+test('followingFids paginates the follow graph and collects fids', async () => {
+  let calls = 0;
+  const fetchImpl = async (url) => {
+    calls += 1;
+    if (calls === 1) {
+      return { ok: true, json: async () => ({ result: { users: [{ fid: 10 }, { fid: 11 }] }, next: { cursor: 'c1' } }) };
+    }
+    return { ok: true, json: async () => ({ result: { users: [{ fid: 12 }] }, next: null }) };
+  };
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '99', fetchImpl });
+  const fids = await reader.followingFids(50);
+  assert.deepEqual(fids, [10, 11, 12]);
+  assert.equal(calls, 2); // followed cursor to page 2, stopped on null cursor
+});
+
+test('followingFids returns empty without a fid', async () => {
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '', fetchImpl: async () => wc([]) });
+  assert.deepEqual(await reader.followingFids(50), []);
+});
+
 test('hub fallback: userCasts uses hubUrl when Warpcast returns nothing (#6)', async () => {
   const seen = [];
   const fetchImpl = async (url) => {

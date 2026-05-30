@@ -19,6 +19,7 @@ export const config = {
   haatzBase: process.env.FARCASTER_API_BASE || process.env.HAATZ_BASE || 'https://api.warpcast.com',
   neynarKey: process.env.NEYNAR_API_KEY || '',
   hubUrl: process.env.HUB_URL || '', // optional public Farcaster hub fallback (#6)
+  briefSampleMax: Number(process.env.BRIEF_SAMPLE_MAX) || 150, // follows loaded for /brief rotation
   // Research depth toggles (#1/#2/#3) - all free, default on for the live loop.
   perspectives: process.env.PERSPECTIVES !== '0',
   reflect: process.env.REFLECT !== '0',
