@@ -39,3 +39,16 @@ test('returns null when everything fails', async () => {
   const brain = makeBrain({ openrouterKey: 'k', freeModels: ['m1'], ollamaUrl: '', fetchImpl });
   assert.equal(await brain.ask('q'), null);
 });
+
+test('skips a 200 response that carries an error body (upstream 429)', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    // First model: HTTP 200 but rate-limited in the body. Second: real content.
+    if (calls === 1) return { ok: true, json: async () => ({ error: { code: 429, message: 'rate-limited' } }) };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'answer' } }] }) };
+  };
+  const brain = makeBrain({ openrouterKey: 'k', freeModels: ['m1', 'm2'], ollamaUrl: '', fetchImpl });
+  assert.equal(await brain.ask('q', { tier: 'light' }), 'answer');
+  assert.equal(calls, 2);
+});
