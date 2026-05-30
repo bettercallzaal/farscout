@@ -31,7 +31,7 @@ test('channelFeed hits /v2/channel-casts per channel and tags channel', async ()
   };
   const reader = makeReader({ base: 'https://api.warpcast.com', fid: '1', fetchImpl });
   const casts = await reader.channelFeed(['zao'], 5);
-  assert.match(seen[0], /\/v2\/channel-casts\?channelKey=zao&limit=5/);
+  assert.match(seen[0], /\/v1\/channel-casts\?channelKey=zao&limit=5/);
   assert.equal(casts[0].channel, 'zao');
 });
 
