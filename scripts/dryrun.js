@@ -21,8 +21,8 @@ const ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:latest';
 
 console.log(`\n[dryrun] fid=${fid} channels=${channels.join(',')} model=${ollamaModel}\n`);
 
-const reader = makeReader({ base: 'https://haatz.quilibrium.com', fid, fetchImpl: fetch });
-const search = makeSearch({ base: 'https://haatz.quilibrium.com', fetchImpl: fetch, exaKey: process.env.EXA_API_KEY || '' });
+const reader = makeReader({ base: 'https://api.warpcast.com', fid, fetchImpl: fetch });
+const search = makeSearch({ base: 'https://api.warpcast.com', fetchImpl: fetch, exaKey: process.env.EXA_API_KEY || '' });
 
 // Force the local path: no cloud key + empty free models -> brain falls back to Ollama.
 const brain = makeBrain({ openrouterKey: '', freeModels: [], ollamaUrl, ollamaModel, fetchImpl: fetch });
