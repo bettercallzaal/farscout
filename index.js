@@ -10,6 +10,7 @@ import { makeSearch } from './lib/search.js';
 import { createEnrich } from './lib/enrich.js';
 import { makeDiscord } from './lib/discord.js';
 import { runCycle, researchTopic } from './lib/research.js';
+import { buildBrief } from './lib/brief.js';
 import { nextInterval, START_MS } from './lib/cadence.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -68,10 +69,31 @@ async function main() {
 
   let paused = false;
   let timer;
+  let followsCache = []; // lazily loaded follow-graph (taste signal for /brief)
   const state = await loadCadence(CADENCE_FILE, START_MS);
   state.interval ??= START_MS;
   state.digestLog ??= [];
   state.lastDigestAt ??= Date.now();
+  state.briefCursor ??= 0;
+
+  async function ensureFollows() {
+    if (followsCache.length) return followsCache;
+    followsCache = await reader.followingFids(config.briefSampleMax).catch(() => []);
+    return followsCache;
+  }
+
+  // Flagship: curated daily brief from the accounts you follow.
+  async function sendBrief() {
+    const follows = await ensureFollows();
+    if (!follows.length) {
+      await discord.deliver('No follows loaded - brief needs your FARCASTER_FID follow graph (free).');
+      return;
+    }
+    const b = await buildBrief({ reader, brain, follows, cursor: state.briefCursor, max: 5 });
+    state.briefCursor = b.nextCursor;
+    await saveCadence(CADENCE_FILE, state);
+    await discord.deliver(b.text || `No brief this round (${b.reason || 'thin signal'}). Try again - it rotates through different follows each run.`);
+  }
 
   // Weekly storyline rollup (#5): lead with the topics that recurred across the
   // window (the arcs), then the raw recent findings.
@@ -118,8 +140,23 @@ async function main() {
       } else if (cmd === 'digest') {
         await sendDigest();
         if (!state.digestLog.length) await discord.deliver('Nothing logged yet.');
+      } else if (cmd === 'brief') {
+        await discord.deliver('Curating your network brief...');
+        await sendBrief();
+      } else if (cmd === 'ask') {
+        const q = rest.trim().slice(0, 200);
+        if (!q) {
+          await discord.deliver('usage: /ask <question>');
+          return;
+        }
+        await discord.deliver(`Looking into: "${q}"...`);
+        const topic = q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+        const res = await researchTopic({ brain, search, topic: q, seedUrls: [], enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
+        void topic;
+        const msg = formatResult(res);
+        await discord.deliver(msg || `No grounded answer for "${q}" (no usable sources).`);
       } else {
-        await discord.deliver(`Unknown command /${cmd}. Try /now, /dig <topic>, /digest, /pause, /resume.`);
+        await discord.deliver(`Unknown command /${cmd}. Try /brief, /ask <q>, /now, /dig <topic>, /digest, /pause, /resume.`);
       }
     },
   });
@@ -170,7 +207,7 @@ async function main() {
   }
 
   await discord.start();
-  await discord.deliver('farscout online. Watching Farcaster. Reply any time to speed me up; stay quiet and I idle toward once a day. /dig <topic> for on-demand research.');
+  await discord.deliver('farscout online. /brief for your network digest, /ask <q> for a grounded answer, /dig <topic> for deep research. Reply any time to speed me up; stay quiet and I idle toward once a day.');
   schedule();
 }
 
