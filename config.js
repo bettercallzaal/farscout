@@ -15,7 +15,8 @@ export const config = {
   standingTopics: list(process.env.STANDING_TOPICS).length
     ? list(process.env.STANDING_TOPICS)
     : ['farcaster-mini-apps', 'farcaster-frames-v2', 'farcaster-snaps'],
-  haatzBase: process.env.HAATZ_BASE || 'https://haatz.quilibrium.com',
+  // Free, no-auth Warpcast public API. (HAATZ_BASE kept for back-compat override.)
+  haatzBase: process.env.FARCASTER_API_BASE || process.env.HAATZ_BASE || 'https://api.warpcast.com',
   neynarKey: process.env.NEYNAR_API_KEY || '',
   exaKey: process.env.EXA_API_KEY || '',
   bonfireKey: process.env.BONFIRE_API_KEY,

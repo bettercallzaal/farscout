@@ -2,7 +2,7 @@
 
 A free, mostly-autonomous Farcaster research scout for the ZAO ecosystem.
 
-It reads Farcaster (your casts, watch-channels, trending, mentions, and watched builders) via the free HAATZ API, grounds every topic in real sources (Farcaster cast search + web search) before reasoning with OpenRouter free-tier models (routing heavy or private work to a local Mac Ollama when reachable), remembers what it learns in the ZABAL Bonfire knowledge graph, and talks with you in Discord on an engagement-scaled cadence: the more you reply, the faster it comes back; go quiet and it idles toward once a day.
+It reads Farcaster (your casts, watch-channels, trending, mentions, and watched builders) via the free the Warpcast API API, grounds every topic in real sources (Farcaster cast search + web search) before reasoning with OpenRouter free-tier models (routing heavy or private work to a local Mac Ollama when reachable), remembers what it learns in the ZABAL Bonfire knowledge graph, and talks with you in Discord on an engagement-scaled cadence: the more you reply, the faster it comes back; go quiet and it idles toward once a day.
 
 Findings are grounded in real sources, never the model's stale memory - a finding that cannot cite a source URL is dropped. It has a standing watch on Farcaster Mini Apps, Frames, and Snaps, and surfaces Mini Apps / Frames it spots in casts.
 
@@ -22,7 +22,7 @@ tick -> read Farcaster (own casts + channels + trending + mentions + watched FID
 
 - `lib/http.js` - shared fetch with exponential backoff on 429/5xx; HTML-to-text.
 - `lib/cadence.js` - adaptive interval (30 min floor, 24 h ceiling, 6 h start).
-- `lib/reader.js` - HAATZ reads (own casts, channels, trending, mentions, watched FIDs); embed + reaction extraction; Neynar failover.
+- `lib/reader.js` - the Warpcast API reads (own casts, channels, trending, mentions, watched FIDs); embed + reaction extraction; Neynar failover.
 - `lib/search.js` - grounding: Farcaster cast search, web search (Exa or free DuckDuckGo), URL fetch, Frame/Mini App detection.
 - `lib/brain.js` - model router (OpenRouter free + Ollama).
 - `lib/memory.js` - Bonfire push + fuzzy dedup (canonical + token overlap) + local retry queue.
@@ -59,7 +59,7 @@ npm start              # run the live loop
 | `EXA_API_KEY` | Optional. Better web grounding via Exa. Blank = free DuckDuckGo. |
 | `DIGEST_INTERVAL_MS` | Optional. Weekly digest cadence (default 7 days). |
 
-HAATZ needs no key (free, public, read-only). Web grounding works with no key (DuckDuckGo).
+the Warpcast API needs no key (free, public, read-only). Web grounding works with no key (DuckDuckGo).
 
 ## Discord commands
 
@@ -83,7 +83,7 @@ Free tier is 256MB RAM / 20% CPU - farscout's deps are lean and it fits. No LLM 
 
 ## Cost
 
-- HAATZ reads: $0.
+- the Warpcast API reads: $0.
 - OpenRouter free models: $0.
 - Bonfire: $0 (existing ZAO key).
 - bot-hosting.net: $0 (daily coins) or a few coins for more RAM.
