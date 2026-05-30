@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetch } from 'undici';
@@ -26,6 +26,9 @@ export async function loadCadence(file, fallback) {
 }
 
 export async function saveCadence(file, obj) {
+  // Ensure the state/ dir exists - a fresh clone has no state/ until first write,
+  // and an ENOENT here would crash the whole process (it did on the VPS).
+  await mkdir(dirname(file), { recursive: true }).catch(() => {});
   await writeFile(file, JSON.stringify(obj, null, 2));
 }
 
