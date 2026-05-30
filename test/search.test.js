@@ -51,6 +51,17 @@ test('fetchUrl blocks SSRF targets without fetching', async () => {
   assert.equal(called, false);
 });
 
+test('fetchUrl does not follow redirects (SSRF via 3xx)', async () => {
+  // redirect:'manual' makes a 3xx come back non-ok; fetchUrl must not follow it.
+  const fetchImpl = async (url, opts) => {
+    assert.equal(opts.redirect, 'manual');
+    return { ok: false, status: 302, headers: { get: () => 'http://169.254.169.254/' }, text: async () => '' };
+  };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  const r = await search.fetchUrl('https://public.example/redir');
+  assert.equal(r.status, 'FAILED');
+});
+
 test('duckSearch parses results when href precedes class', async () => {
   const html = '<a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.farcaster.xyz%2Fframes" class="result__a">Frames docs</a>';
   const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => html });
