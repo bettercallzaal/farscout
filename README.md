@@ -2,33 +2,41 @@
 
 A free, mostly-autonomous Farcaster research scout for the ZAO ecosystem.
 
-It reads Farcaster (your casts, watch-channels) via the free HAATZ API, reasons with OpenRouter free-tier models (routing heavy or private work to a local Mac Ollama when reachable), remembers what it learns in the ZABAL Bonfire knowledge graph, and talks with you in Discord on an engagement-scaled cadence: the more you reply, the faster it comes back; go quiet and it idles toward once a day.
+It reads Farcaster (your casts, watch-channels, trending, mentions, and watched builders) via the free HAATZ API, grounds every topic in real sources (Farcaster cast search + web search) before reasoning with OpenRouter free-tier models (routing heavy or private work to a local Mac Ollama when reachable), remembers what it learns in the ZABAL Bonfire knowledge graph, and talks with you in Discord on an engagement-scaled cadence: the more you reply, the faster it comes back; go quiet and it idles toward once a day.
+
+Findings are grounded in real sources, never the model's stale memory - a finding that cannot cite a source URL is dropped. It has a standing watch on Farcaster Mini Apps, Frames, and Snaps, and surfaces Mini Apps / Frames it spots in casts.
 
 v1 is read-only on Farcaster. Public posting is a deferred v2 feature.
 
 ## How it works
 
 ```
-tick -> read Farcaster (HAATZ) -> extract topics (free model)
-     -> dedup vs Bonfire memory -> research novel topics (heavy model)
-     -> deliver findings + questions to Discord
-     -> push learnings to Bonfire -> set next cadence -> persist
+tick -> read Farcaster (own casts + channels + trending + mentions + watched FIDs)
+     -> rank by engagement -> extract topics (free model) + standing watch topics
+     -> fuzzy-dedup vs memory
+     -> GROUND each novel topic: search Farcaster + web, fetch URLs, detect Frames/Mini Apps
+     -> research from sources only (heavy model); drop any finding with no source
+     -> deliver sourced findings + spotted mini apps + questions to Discord
+     -> push learnings to Bonfire -> set next cadence -> persist -> weekly digest
 ```
 
+- `lib/http.js` - shared fetch with exponential backoff on 429/5xx; HTML-to-text.
 - `lib/cadence.js` - adaptive interval (30 min floor, 24 h ceiling, 6 h start).
-- `lib/reader.js` - HAATZ reads with optional Neynar failover.
+- `lib/reader.js` - HAATZ reads (own casts, channels, trending, mentions, watched FIDs); embed + reaction extraction; Neynar failover.
+- `lib/search.js` - grounding: Farcaster cast search, web search (Exa or free DuckDuckGo), URL fetch, Frame/Mini App detection.
 - `lib/brain.js` - model router (OpenRouter free + Ollama).
-- `lib/memory.js` - Bonfire push + dedup + local retry queue.
-- `lib/research.js` - one research cycle.
+- `lib/memory.js` - Bonfire push + fuzzy dedup (canonical + token overlap) + local retry queue.
+- `lib/util.js` - JSON/line/slug coercion, canonicalize + token overlap.
+- `lib/research.js` - one grounded research cycle; sourced findings; engagement weighting; standing topics.
 - `lib/discord.js` - talkback + engagement tracking.
-- `index.js` - orchestrator + boot recovery.
+- `index.js` - orchestrator + boot recovery + weekly digest + `/dig`.
 
 ## Setup
 
 ```bash
 cp .env.example .env   # then fill it in
 npm install
-npm test               # 21 unit tests
+npm test               # 34 unit tests
 npm run bootstrap      # one-time: seed Bonfire with baseline FC knowledge
 npm start              # run the live loop
 ```
@@ -43,15 +51,21 @@ npm start              # run the live loop
 | `FREE_MODEL_IDS` | Comma-list of OpenRouter `:free` model ids to rotate. |
 | `FARCASTER_FID` | Your Farcaster FID. |
 | `WATCH_CHANNELS` | Comma-list of channel ids, e.g. `zao,dev,miniapps`. |
+| `WATCH_FIDS` | Optional. Comma-list of FIDs of key builders to track. |
+| `STANDING_TOPICS` | Always-researched topics. Defaults to `farcaster-mini-apps,farcaster-frames-v2,farcaster-snaps`. |
 | `BONFIRE_API_KEY`, `BONFIRE_ID` | From `~/.zao/zao.env` (`BONFIRE_API_KEY`, `BONFIRE_ID`). |
 | `OLLAMA_TUNNEL_URL` | Optional. Public URL of your Mac's Ollama (e.g. a cloudflared/ngrok tunnel to `:11434`). Leave blank to stay all-cloud. |
-| `NEYNAR_API_KEY` | Optional read failover; also the path to v2 writes later. |
+| `NEYNAR_API_KEY` | Optional read + cast-search failover; also the path to v2 writes later. |
+| `EXA_API_KEY` | Optional. Better web grounding via Exa. Blank = free DuckDuckGo. |
+| `DIGEST_INTERVAL_MS` | Optional. Weekly digest cadence (default 7 days). |
 
-HAATZ needs no key (free, public, read-only).
+HAATZ needs no key (free, public, read-only). Web grounding works with no key (DuckDuckGo).
 
 ## Discord commands
 
 - `/now` - run a research cycle immediately.
+- `/dig <topic>` - on-demand grounded deep research on any topic.
+- `/digest` - send the accumulated digest now.
 - `/pause` - stop cycling.
 - `/resume` - resume cycling.
 

@@ -1,101 +1,113 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCycle } from '../lib/research.js';
+import { runCycle, researchTopic } from '../lib/research.js';
 
-test('runCycle produces findings and remembers novel topics', async () => {
+function fakeSearch({ casts = [], web = [], frame = null } = {}) {
+  return {
+    searchCasts: async () => casts,
+    webSearch: async () => web,
+    fetchUrl: async (url) => ({ url, status: 'FULL', text: 'page text', frame }),
+  };
+}
+
+function fakeMemory() {
+  const known = new Set();
+  const pushed = [];
+  return {
+    isKnown: (k) => known.has(k),
+    remember: (k) => known.add(k),
+    pushEpisode: async (t) => { pushed.push(t); return true; },
+    _known: known,
+    _pushed: pushed,
+  };
+}
+
+test('runCycle returns empty when no casts and no standing topics', async () => {
+  const reader = { userCasts: async () => [], channelFeed: async () => [] };
+  const brain = { ask: async () => { throw new Error('should not be called'); } };
+  const out = await runCycle({ reader, brain, memory: fakeMemory(), search: fakeSearch(), channels: [] });
+  assert.deepEqual(out, { findings: [], questions: [], frames: [] });
+});
+
+test('runCycle extracts, grounds, and keeps only sourced findings', async () => {
   const reader = {
-    userCasts: async () => [{ hash: '0x1', text: 'exploring miniapp auth' }],
+    userCasts: async () => [{ text: 'loving zora mini apps lately, great builders', reactions: { likes: 10, recasts: 3 }, embeds: [] }],
     channelFeed: async () => [],
   };
-  const remembered = [];
-  const pushed = [];
-  const memory = {
-    isKnown: () => false,
-    remember: (k) => remembered.push(k),
-    pushEpisode: async (t) => { pushed.push(t); return true; },
-  };
-  let asked = 0;
+  let call = 0;
   const brain = {
     ask: async () => {
-      asked += 1;
-      if (asked === 1) return JSON.stringify({ topics: ['miniapp-auth'], summary: 'auth focus' });
-      return JSON.stringify({ findings: ['SIWF v2 shipped'], questions: ['Use quick-auth?'] });
+      call += 1;
+      if (call === 1) return JSON.stringify({ topics: ['mini-apps'], summary: 's' });
+      return JSON.stringify({ findings: [{ text: 'Mini apps are growing fast', cite: 1 }], questions: ['Why?'] });
     },
   };
-  const out = await runCycle({ reader, brain, memory, channels: ['zao'], recentReplies: [] });
-  assert.deepEqual(out.findings, ['SIWF v2 shipped']);
-  assert.deepEqual(out.questions, ['Use quick-auth?']);
-  assert.deepEqual(remembered, ['miniapp-auth']);
-  assert.equal(pushed.length, 1);
+  const search = fakeSearch({ web: [{ title: 'src', url: 'https://example.com/miniapps', snippet: 'data', source: 'web' }] });
+  const memory = fakeMemory();
+  const out = await runCycle({ reader, brain, memory, search, channels: [] });
+  assert.equal(out.findings.length, 1);
+  assert.match(out.findings[0], /Mini apps are growing fast \(https:\/\/example\.com\/miniapps\)/);
+  assert.ok(memory._known.has('mini-apps'));
+  assert.equal(memory._pushed.length, 1);
 });
 
-test('runCycle skips when no novel topics', async () => {
-  const reader = { userCasts: async () => [{ text: 'gm' }], channelFeed: async () => [] };
-  const memory = { isKnown: () => true, remember: () => {}, pushEpisode: async () => true };
-  const brain = { ask: async () => JSON.stringify({ topics: ['known-topic'] }) };
-  const out = await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
-  assert.deepEqual(out, { findings: [], questions: [] });
+test('researchTopic drops findings with no usable sources', async () => {
+  const out = await researchTopic({
+    brain: { ask: async () => { throw new Error('no call'); } },
+    search: fakeSearch({ casts: [], web: [] }),
+    topic: 'ghost-topic',
+  });
+  assert.deepEqual(out.findings, []);
 });
 
-test('runCycle returns empty on empty corpus', async () => {
+test('researchTopic drops a finding whose cite is missing or out of range', async () => {
+  const search = fakeSearch({ web: [{ title: 's', url: 'https://real.dev', snippet: 'x', source: 'web' }] });
+  const brain = {
+    ask: async () => JSON.stringify({
+      findings: [
+        { text: 'no cite finding' }, // no cite -> dropped
+        { text: 'bad cite finding', cite: 9 }, // out of range -> dropped
+        { text: 'good finding', cite: 1 }, // valid -> kept with source
+      ],
+      questions: [],
+    }),
+  };
+  const out = await researchTopic({ brain, search, topic: 't' });
+  assert.equal(out.findings.length, 1);
+  assert.match(out.findings[0], /good finding \(https:\/\/real\.dev\)/);
+});
+
+test('researchTopic surfaces detected mini apps as frames', async () => {
+  const search = fakeSearch({
+    web: [{ title: 'app', url: 'https://app.xyz', snippet: 's', source: 'web' }],
+    frame: { isMiniApp: true, title: 'Cool Mini App' },
+  });
+  const brain = { ask: async () => JSON.stringify({ findings: [], questions: [] }) };
+  const out = await researchTopic({ brain, search, topic: 'cool-app' });
+  assert.equal(out.frames[0].isMiniApp, true);
+  assert.equal(out.frames[0].title, 'Cool Mini App');
+});
+
+test('runCycle researches standing topics even with no casts', async () => {
   const reader = { userCasts: async () => [], channelFeed: async () => [] };
-  const memory = { isKnown: () => false, remember: () => {}, pushEpisode: async () => true };
-  let asked = false;
-  const brain = { ask: async () => { asked = true; return '{}'; } };
-  const out = await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
-  assert.deepEqual(out, { findings: [], questions: [] });
-  assert.equal(asked, false);
-});
-
-test('runCycle coerces object-shaped findings to strings', async () => {
-  const reader = { userCasts: async () => [{ text: 'building miniapps' }], channelFeed: async () => [] };
-  const pushed = [];
-  const memory = { isKnown: () => false, remember: () => {}, pushEpisode: async (t) => { pushed.push(t); return true; } };
-  let asked = 0;
-  const brain = {
-    ask: async () => {
-      asked += 1;
-      if (asked === 1) return JSON.stringify({ topics: ['Mini Apps', '!!!'] });
-      return JSON.stringify({
-        findings: [{ title: 'SIWF v2', detail: 'shipped' }, 'plain string fact'],
-        questions: [{ question: 'Which client?' }],
-      });
-    },
-  };
-  const out = await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
-  assert.ok(out.findings.every((f) => typeof f === 'string'));
-  assert.ok(!out.findings.some((f) => f.includes('[object Object]')));
-  assert.equal(out.questions[0], 'Which client?');
-  assert.ok(!pushed.some((p) => p.includes('[object Object]')));
-});
-
-test('runCycle slugifies messy topics and drops junk', async () => {
-  const reader = { userCasts: async () => [{ text: 'x' }], channelFeed: async () => [] };
-  const remembered = [];
-  const memory = { isKnown: () => false, remember: (k) => remembered.push(k), pushEpisode: async () => true };
-  let asked = 0;
-  const brain = {
-    ask: async () => {
-      asked += 1;
-      if (asked === 1) return JSON.stringify({ topics: ['Farcaster Snaps', 'a', '!!!'] });
-      return JSON.stringify({ findings: ['ok'], questions: [] });
-    },
-  };
-  await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
-  assert.deepEqual(remembered, ['farcaster-snaps']); // 'a' too short, '!!!' empty after slug
+  const brain = { ask: async () => JSON.stringify({ findings: [{ text: 'Frames v2 shipped', cite: 1 }], questions: [] }) };
+  const search = fakeSearch({ web: [{ title: 's', url: 'https://fc.dev/frames', snippet: 'x', source: 'web' }] });
+  const out = await runCycle({ reader, brain, memory: fakeMemory(), search, channels: [], standingTopics: ['frames-v2'] });
+  assert.ok(out.findings.length > 0);
+  assert.match(out.findings[0], /https:\/\/fc\.dev\/frames/);
 });
 
 test('runCycle caps questions at 2', async () => {
-  const reader = { userCasts: async () => [{ text: 'a' }], channelFeed: async () => [] };
-  const memory = { isKnown: () => false, remember: () => {}, pushEpisode: async () => true };
-  let asked = 0;
+  const reader = { userCasts: async () => [{ text: 'a topic worth discussing here', reactions: { likes: 1 } }], channelFeed: async () => [] };
+  let call = 0;
   const brain = {
     ask: async () => {
-      asked += 1;
-      if (asked === 1) return JSON.stringify({ topics: ['t1'] });
-      return JSON.stringify({ findings: ['f'], questions: ['q1', 'q2', 'q3'] });
+      call += 1;
+      if (call === 1) return JSON.stringify({ topics: ['t1', 't2', 't3', 't4', 't5'] });
+      return JSON.stringify({ findings: [{ text: 'f', cite: 1 }], questions: ['q?'] });
     },
   };
-  const out = await runCycle({ reader, brain, memory, channels: [], recentReplies: [] });
-  assert.equal(out.questions.length, 2);
+  const search = fakeSearch({ web: [{ title: 's', url: 'https://x.dev', snippet: 'x', source: 'web' }] });
+  const out = await runCycle({ reader, brain, memory: fakeMemory(), search, channels: [] });
+  assert.ok(out.questions.length <= 2);
 });

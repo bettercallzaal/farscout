@@ -11,6 +11,7 @@
 import { fetch } from 'undici';
 import { makeReader } from '../lib/reader.js';
 import { makeBrain } from '../lib/brain.js';
+import { makeSearch } from '../lib/search.js';
 import { runCycle } from '../lib/research.js';
 
 const fid = process.argv[2] || process.env.FARCASTER_FID || '1325';
@@ -21,6 +22,7 @@ const ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:latest';
 console.log(`\n[dryrun] fid=${fid} channels=${channels.join(',')} model=${ollamaModel}\n`);
 
 const reader = makeReader({ base: 'https://haatz.quilibrium.com', fid, fetchImpl: fetch });
+const search = makeSearch({ base: 'https://haatz.quilibrium.com', fetchImpl: fetch, exaKey: process.env.EXA_API_KEY || '' });
 
 // Force the local path: no cloud key + empty free models -> brain falls back to Ollama.
 const brain = makeBrain({ openrouterKey: '', freeModels: [], ollamaUrl, ollamaModel, fetchImpl: fetch });
@@ -49,12 +51,22 @@ if (sample[0]?.text) console.log(`  sample cast: ${sample[0].text.slice(0, 90)}\
 
 console.log('[stage] running full cycle (extract -> dedup -> research)...\n');
 const t0 = Date.now();
-const out = await runCycle({ reader, brain, memory, channels, recentReplies: [] });
+const out = await runCycle({
+  reader,
+  brain,
+  memory,
+  search,
+  channels,
+  standingTopics: ['farcaster-mini-apps', 'farcaster-frames-v2'],
+  recentReplies: [],
+});
 const secs = ((Date.now() - t0) / 1000).toFixed(1);
 
 console.log(`\n========== RESULT (${secs}s) ==========`);
 console.log('FINDINGS:');
 for (const f of out.findings) console.log(`  - ${f}`);
+console.log('FRAMES / MINI APPS:');
+for (const fr of out.frames || []) console.log(`  - ${fr.title || 'untitled'} ${fr.isMiniApp ? '[mini app]' : '[frame]'} ${fr.url}`);
 console.log('QUESTIONS:');
 for (const q of out.questions) console.log(`  - ${q}`);
 console.log(`\nEpisodes that would have gone to Bonfire: ${pushed.length}`);

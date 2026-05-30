@@ -43,3 +43,33 @@ test('channelFeed empty channels returns empty without fetch', async () => {
   assert.deepEqual(await reader.channelFeed([]), []);
   assert.equal(called, false);
 });
+
+test('userCasts normalizes embeds (incl. text urls) and reactions', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({
+      casts: [{
+        text: 'check https://miniapp.xyz now',
+        author: { username: 'a' },
+        hash: '0x2',
+        embeds: [{ url: 'https://frame.example' }],
+        reactions: { likes_count: 5, recasts_count: 2 },
+      }],
+    }),
+  });
+  const reader = makeReader({ base: 'https://h.test', fid: '99', fetchImpl });
+  const [c] = await reader.userCasts(1);
+  assert.ok(c.embeds.includes('https://frame.example'));
+  assert.ok(c.embeds.includes('https://miniapp.xyz'));
+  assert.deepEqual(c.reactions, { likes: 5, recasts: 2 });
+});
+
+test('trendingFeed returns normalized casts', async () => {
+  const fetchImpl = async (url) => {
+    assert.match(url, /feed\/trending/);
+    return { ok: true, json: async () => ({ casts: [{ text: 'hot', author: { username: 'z' } }] }) };
+  };
+  const reader = makeReader({ base: 'https://h.test', fid: '1', fetchImpl });
+  const casts = await reader.trendingFeed(5);
+  assert.equal(casts[0].text, 'hot');
+});
