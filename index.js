@@ -7,6 +7,7 @@ import { makeReader } from './lib/reader.js';
 import { makeBrain } from './lib/brain.js';
 import { makeMemory } from './lib/memory.js';
 import { makeSearch } from './lib/search.js';
+import { createEnrich } from './lib/enrich.js';
 import { makeDiscord } from './lib/discord.js';
 import { runCycle, researchTopic } from './lib/research.js';
 import { nextInterval, START_MS } from './lib/cadence.js';
@@ -63,6 +64,7 @@ async function main() {
   });
   await memory.load();
   const search = makeSearch({ base: config.haatzBase, fetchImpl: fetch, neynarKey: config.neynarKey, exaKey: config.exaKey });
+  const enrich = createEnrich({ fetchImpl: fetch });
 
   let paused = false;
   let timer;
@@ -98,7 +100,7 @@ async function main() {
           return;
         }
         await discord.deliver(`Digging into "${topic}"...`);
-        const res = await researchTopic({ brain, search, topic });
+        const res = await researchTopic({ brain, search, topic, enrich });
         const msg = formatResult(res);
         await discord.deliver(msg || `Nothing solid found for "${topic}" (no usable sources).`);
       } else if (cmd === 'digest') {
@@ -119,6 +121,7 @@ async function main() {
         brain,
         memory,
         search,
+        enrich,
         channels: config.watchChannels,
         watchFids: config.watchFids,
         standingTopics: config.standingTopics,
