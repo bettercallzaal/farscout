@@ -23,22 +23,32 @@ test('userCasts returns empty on non-ok', async () => {
   assert.deepEqual(await reader.userCasts(10), []);
 });
 
-test('channelFeed hits /v2/channel-casts per channel and tags channel', async () => {
+test('channelFeed is a no-op without a Neynar key (no wasted fetch)', async () => {
+  let called = false;
+  const fetchImpl = async () => { called = true; return wc([]); };
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '1', fetchImpl }); // no neynarKey
+  assert.deepEqual(await reader.channelFeed(['zao'], 5), []);
+  assert.equal(called, false);
+});
+
+test('channelFeed uses Neynar when a key is present and tags channel', async () => {
   const seen = [];
-  const fetchImpl = async (url) => {
-    seen.push(url);
-    return wc([{ hash: '0xa', text: 'hi', author: { username: 'z' } }]);
+  const fetchImpl = async (url, opts) => {
+    seen.push({ url, key: opts.headers?.api_key });
+    return { ok: true, json: async () => ({ casts: [{ hash: '0xa', text: 'hi', author: { username: 'z' }, reactions: { likes_count: 2 } }] }) };
   };
-  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '1', fetchImpl });
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '1', fetchImpl, neynarKey: 'NK' });
   const casts = await reader.channelFeed(['zao'], 5);
-  assert.match(seen[0], /\/v1\/channel-casts\?channelKey=zao&limit=5/);
+  assert.match(seen[0].url, /api\.neynar\.com\/v2\/farcaster\/feed\/channels\?channel_ids=zao&limit=5/);
+  assert.equal(seen[0].key, 'NK');
   assert.equal(casts[0].channel, 'zao');
+  assert.equal(casts[0].reactions.likes, 2);
 });
 
 test('channelFeed empty channels returns empty without fetch', async () => {
   let called = false;
   const fetchImpl = async () => { called = true; return wc([]); };
-  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '1', fetchImpl });
+  const reader = makeReader({ base: 'https://api.warpcast.com', fid: '1', fetchImpl, neynarKey: 'NK' });
   assert.deepEqual(await reader.channelFeed([]), []);
   assert.equal(called, false);
 });
