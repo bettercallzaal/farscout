@@ -30,9 +30,10 @@ Minimum to run: `DISCORD_TOKEN`, `DISCORD_USER_ID`, `FARCASTER_FID`, and EITHER 
 
 ```
 tick -> read Farcaster (own casts + channels + watched FIDs)
+        + read Reddit (watched subreddits + watched redditors)
      -> rank by engagement -> extract topics (light model) + standing topics
      -> NOVELTY TRIAGE (traction + novelty + token-signal; dedup; top 3)
-     -> per topic: GROUND (cast search + web search + URL/Jina-reader fetch
+     -> per topic: GROUND (cast search + Reddit search + web search + URL/Jina-reader fetch
                            + $ticker market data + Frame/Mini-App detect)
      -> [perspectives] decompose into market/tech/social angles
      -> TWO-PASS SYNTHESIS (extract claims [light] -> synthesize insights [heavy])
@@ -51,7 +52,8 @@ tick -> read Farcaster (own casts + channels + watched FIDs)
 | `index.js` | Orchestrator: boot, Discord command surface, tick loop, digest, cadence persistence | the wiring example |
 | `config.js` | Env config + `requireConfig` (Ollama-OR-OpenRouter validation) | add new env knobs here |
 | `lib/reader.js` | Warpcast reads (`/v2/casts`, `/v1/channel-casts` via Neynar, `followingFids` graph, watched FIDs), `normalizeCast`, `castWeight`, hub fallback | any Farcaster read |
-| `lib/search.js` | Grounding: cast search, web search (Exa -> Jina -> DuckDuckGo chain), `fetchUrl` (+ Jina Reader), `detectFrame` | any grounded lookup |
+| `lib/reddit.js` | Reddit reads on the free no-auth JSON API: `subredditFeed`, `userPosts`, `normalizePost` into the cast shape (score->likes, comments->recasts) | any Reddit read |
+| `lib/search.js` | Grounding: cast search, Reddit search, web search (Exa -> Jina -> DuckDuckGo chain), `fetchUrl` (+ Jina Reader), `detectFrame` | any grounded lookup |
 | `lib/enrich.js` | Crypto enrichment: `extractTickers`, Dexscreener `marketFacts` (price/liq/vol/FDV) | any token-aware feature |
 | `lib/triage.js` | Novelty triage: `scoreTopic`, `triage` (traction + novelty + dedup) | ranking what to work on |
 | `lib/research.js` | `gatherSignal`, `gatherSources`, `researchTopic` (two-pass + reflect + verify + perspectives), `runCycle` | the research engine |
@@ -92,6 +94,8 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 | Cast search | Warpcast | yes | no | `GET /v2/search-casts?q=clanker&limit=8` |
 | Follow graph | Warpcast | yes | no | `GET /v2/following?fid=19640&limit=50` (cap 50/page) |
 | Channels (optional) | Neynar v2 | free key | yes | `GET https://api.neynar.com/v2/farcaster/feed/channels?channel_ids=zao` |
+| Reddit read | Reddit JSON | yes | no | `GET https://www.reddit.com/r/ethereum/hot.json?limit=25` |
+| Reddit search | Reddit JSON | yes | no | `GET https://www.reddit.com/search.json?q=farcaster&limit=8` |
 | Web search | Jina `s.jina.ai` | 10M tokens | no | `GET https://s.jina.ai/?q=farcaster+mini+apps` |
 | Page read | Jina `r.jina.ai` | shared | no | `GET https://r.jina.ai/https://docs.farcaster.xyz/` |
 | Crypto data | Dexscreener | yes | no | `GET https://api.dexscreener.com/latest/dex/search?q=clanker` |
@@ -117,6 +121,11 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 | `WATCH_FIDS` | Optional. Comma-list of builder FIDs to track. |
 | `STANDING_TOPICS` | Always-researched. Default `farcaster-mini-apps,farcaster-frames-v2,farcaster-snaps`. |
 | `NEYNAR_API_KEY` | Optional free tier. Enables `WATCH_CHANNELS` (Warpcast has no free channel feed). Without it, channels are skipped. |
+| `WATCH_SUBREDDITS` | Comma-list of subreddits to read each cycle, e.g. `ethereum,CryptoCurrency,farcaster`. Free, no auth. Empty = no Reddit read surface. |
+| `WATCH_REDDITORS` | Optional. Comma-list of Reddit usernames to track (their recent submissions). |
+| `REDDIT_ENABLED` | Reddit on by default. Set to `0` to disable Reddit reads AND Reddit grounding entirely. |
+| `REDDIT_USER_AGENT` | Reddit throttles generic User-Agents (HTTP 429); a descriptive default is set. Override if you like. |
+| `REDDIT_API_BASE` | Override the Reddit base (default `https://www.reddit.com`). |
 | `EXA_API_KEY` | Optional. Better web grounding; blank = Jina then DuckDuckGo. |
 | `BONFIRE_API_KEY`, `BONFIRE_ID` | From `~/.zao/zao.env`. Memory layer; degrades to local-only if absent. |
 | `HUB_URL` | Optional public Farcaster hub HTTP base for a free user-cast fallback. OFF by default - the 2026 public hubs tested (NodeRPC, Pinata) were unreachable. |

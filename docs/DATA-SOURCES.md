@@ -21,6 +21,26 @@ Base `https://api.warpcast.com`. Free, no auth for reads.
 
 `https://api.neynar.com/v2/farcaster/feed/channels?channel_ids=` with header `api_key:`. Free tier ~300 rpm. Only used when `NEYNAR_API_KEY` is set, because **no provider offers a free unauthenticated channel feed** (Warpcast 200s with an empty list).
 
+## Reddit reads + search - public JSON API
+
+Base `https://www.reddit.com`. Free, no auth: append `.json` to any page.
+
+| Endpoint | Use | Quirk |
+|----------|-----|-------|
+| `GET /r/<sub>/<sort>.json?limit=&raw_json=1` | subreddit feed (read surface) | `sort` = hot\|new\|top\|rising; shape `{data:{children:[{kind:'t3',data}]}}` |
+| `GET /user/<name>/submitted.json?limit=&sort=new` | a redditor's posts (watch surface) | same listing shape |
+| `GET /search.json?q=&limit=&sort=relevance&t=year` | Reddit search (grounding) | threads become citable sources |
+
+Posts are normalized into the **same shape as a Farcaster cast** (`text`/`author`/`hash`/`timestamp`/`embeds`/`reactions`), so they slot into the engagement-ranked corpus with no special-casing: `score` (upvotes) -> `reactions.likes`, `num_comments` -> `reactions.recasts`. A link post's external URL becomes an `embed` (a seed URL for grounding); self posts do not.
+
+**Quirks discovered:**
+- **User-Agent is mandatory.** A generic/default UA gets throttled hard (HTTP 429) or served an HTML block page instead of JSON. farscout always sends a descriptive `REDDIT_USER_AGENT`.
+- `raw_json=1` stops Reddit HTML-escaping `&`/`<`/`>` in body text.
+- NSFW posts (`over_18`) are dropped by default (`includeNsfw` to keep them).
+- OAuth (`oauth.reddit.com`) is NOT used - it needs a registered app + token. The `www.reddit.com/*.json` reads are enough and free. Rate limit is generous (~tens/min) with a good UA; the shared `fetchWithBackoff` handles the 429s.
+
+Reddit grounding (search) is ON by default; the read surfaces (`WATCH_SUBREDDITS`, `WATCH_REDDITORS`) activate only when configured. `REDDIT_ENABLED=0` turns the whole source off.
+
 ## Web search - free fallback chain
 
 1. **Exa** (`https://api.exa.ai/search`, POST, `x-api-key`) - only if `EXA_API_KEY` set. Best quality, ~1000 free req/mo.

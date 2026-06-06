@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { fetch } from 'undici';
 import { config, requireConfig } from './config.js';
 import { makeReader } from './lib/reader.js';
+import { makeReddit } from './lib/reddit.js';
 import { makeBrain } from './lib/brain.js';
 import { makeMemory } from './lib/memory.js';
 import { makeSearch } from './lib/search.js';
@@ -52,6 +53,7 @@ async function main() {
   requireConfig();
 
   const reader = makeReader({ base: config.haatzBase, fid: config.fid, fetchImpl: fetch, neynarKey: config.neynarKey, hubUrl: config.hubUrl });
+  const reddit = makeReddit({ base: config.redditBase, fetchImpl: fetch, userAgent: config.redditUserAgent, enabled: config.redditEnabled });
   const brain = makeBrain({
     openrouterKey: config.openrouterKey,
     freeModels: config.freeModels,
@@ -67,7 +69,15 @@ async function main() {
     fetchImpl: fetch,
   });
   await memory.load();
-  const search = makeSearch({ base: config.haatzBase, fetchImpl: fetch, neynarKey: config.neynarKey, exaKey: config.exaKey });
+  const search = makeSearch({
+    base: config.haatzBase,
+    fetchImpl: fetch,
+    neynarKey: config.neynarKey,
+    exaKey: config.exaKey,
+    redditEnabled: config.redditEnabled,
+    redditBase: config.redditBase,
+    redditUserAgent: config.redditUserAgent,
+  });
   const enrich = createEnrich({ fetchImpl: fetch });
 
   let paused = false;
@@ -177,6 +187,9 @@ async function main() {
         enrich,
         channels: config.watchChannels,
         watchFids: config.watchFids,
+        reddit,
+        subreddits: config.watchSubreddits,
+        watchRedditors: config.watchRedditors,
         standingTopics: config.standingTopics,
         recentReplies: discord.recentReplies(),
         perspectives: config.perspectives,

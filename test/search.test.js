@@ -13,6 +13,37 @@ test('searchCasts normalizes results with warpcast urls', async () => {
   assert.equal(hits[0].snippet, 'about frames');
 });
 
+test('searchReddit returns threads as citable sources with reddit.com urls', async () => {
+  let seen;
+  const fetchImpl = async (url, opts) => {
+    seen = { url, ua: opts.headers?.['user-agent'] };
+    return okJson({ data: { children: [
+      { data: { subreddit: 'farcaster', title: 'Mini apps are taking off', selftext: 'long body', permalink: '/r/farcaster/comments/x/mini/' } },
+    ] } });
+  };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl, redditUserAgent: 'UA-Z' });
+  const hits = await search.searchReddit('mini apps');
+  assert.match(seen.url, /reddit\.com\/search\.json\?q=mini%20apps/);
+  assert.equal(seen.ua, 'UA-Z');
+  assert.equal(hits[0].source, 'reddit');
+  assert.equal(hits[0].url, 'https://www.reddit.com/r/farcaster/comments/x/mini/');
+  assert.match(hits[0].title, /^r\/farcaster:/);
+});
+
+test('searchReddit is a no-op when reddit is disabled', async () => {
+  let called = false;
+  const fetchImpl = async () => { called = true; return okJson({}); };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl, redditEnabled: false });
+  assert.deepEqual(await search.searchReddit('anything'), []);
+  assert.equal(called, false);
+});
+
+test('searchReddit fails soft on a non-ok response', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 429, headers: { get: () => null }, json: async () => ({}) });
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  assert.deepEqual(await search.searchReddit('x'), []);
+});
+
 test('webSearch uses exa when key present', async () => {
   let hitExa = false;
   const fetchImpl = async (url) => {

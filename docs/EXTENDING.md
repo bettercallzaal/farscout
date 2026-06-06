@@ -49,9 +49,16 @@ Useful standalone pieces:
 
 ## Add a new data source
 
-Follow the fallback-chain pattern in `lib/search.js`:
+Two flavors, both worked through end-to-end by the Reddit integration (`lib/reddit.js` + `searchReddit` in `lib/search.js`) - copy it as the template.
+
+**A read surface** (feeds the autonomous topic loop), like Farcaster channels:
+- Write a factory `makeX({ fetchImpl, ... })` whose methods return posts normalized into the **cast shape** (`{text,author,hash,timestamp,embeds,reactions:{likes,recasts}}`). Map the source's engagement signal onto `likes`/`recasts` so `castWeight` ranks it. Then it slots into `gatherSignal` in `lib/research.js` with no downstream changes.
+- No-op cleanly (return `[]` without fetching) when not configured, so you never burn a guaranteed-empty request.
+- Thread it through `runCycle`'s signature and `index.js`.
+
+**A grounding source** (citable in findings):
 - Add a function that takes the injected `fetchImpl`, returns `[{title,url,snippet,source}]`, and never throws (return `[]` on failure).
-- Wire it into `webSearch`'s chain (try it, fall through on empty/error).
+- Wire it into `gatherSources` in `lib/research.js` (parallel to `searchCasts`/`webSearch`), or into `webSearch`'s fallback chain.
 - Outbound fetches go through `fetchWithBackoff`; user-derived URLs go through `isPublicHttpUrl`.
 
 ## Add a quality pass

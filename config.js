@@ -18,6 +18,16 @@ export const config = {
   // Free, no-auth Warpcast public API. (HAATZ_BASE kept for back-compat override.)
   haatzBase: process.env.FARCASTER_API_BASE || process.env.HAATZ_BASE || 'https://api.warpcast.com',
   neynarKey: process.env.NEYNAR_API_KEY || '',
+  // Reddit: free, no-auth public JSON API. Subreddits are a read surface (feed the
+  // cycle like Farcaster channels) and Reddit search is a citable grounding source.
+  // Reddit grounding is on by default; the subreddit/redditor read surfaces only
+  // activate when configured. Set REDDIT_ENABLED=0 to turn Reddit off entirely.
+  redditEnabled: process.env.REDDIT_ENABLED !== '0',
+  redditBase: process.env.REDDIT_API_BASE || 'https://www.reddit.com',
+  // Reddit throttles generic User-Agents hard - send a descriptive one.
+  redditUserAgent: process.env.REDDIT_USER_AGENT || 'farscout research scout (+https://github.com/bettercallzaal/farscout)',
+  watchSubreddits: list(process.env.WATCH_SUBREDDITS),
+  watchRedditors: list(process.env.WATCH_REDDITORS),
   hubUrl: process.env.HUB_URL || '', // optional public Farcaster hub fallback (#6)
   briefSampleMax: Number(process.env.BRIEF_SAMPLE_MAX) || 150, // follows loaded for /brief rotation
   // Research depth toggles (#1/#2/#3) - all free, default on for the live loop.
