@@ -61,6 +61,13 @@ Two flavors, both worked through end-to-end by the Reddit integration (`lib/redd
 - Wire it into `gatherSources` in `lib/research.js` (parallel to `searchCasts`/`webSearch`), or into `webSearch`'s fallback chain.
 - Outbound fetches go through `fetchWithBackoff`; user-derived URLs go through `isPublicHttpUrl`.
 
+## Add a theme
+
+A theme is a named bundle of read surfaces + standing topics for one domain (see `lib/themes.js`). To add one (e.g. `ethereum`):
+- Drop a preset into `THEME_PRESETS`: `{ channels: [...], subreddits: [...], standingTopics: [...] }`.
+- That's it - `resolveThemes` merges it whenever the name appears in `THEMES`, and `config.js` wires the merged set into the cycle. No other code changes.
+- Users opt in with `THEMES=farcaster,gamestop,ethereum`. `/themes` shows the live set.
+
 ## Add a quality pass
 
 The research pipeline (`researchTopic` in `lib/research.js`) is a sequence of optional passes gated by booleans. To add one (e.g. a "dedup against existing findings" pass):

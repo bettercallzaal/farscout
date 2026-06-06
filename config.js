@@ -1,8 +1,28 @@
 import 'dotenv/config';
+import { resolveThemes, KNOWN_THEMES } from './lib/themes.js';
 
 const list = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []);
+const mergeCI = (a, b) => {
+  const seen = new Set();
+  const out = [];
+  for (const v of [...a, ...b]) {
+    const k = String(v).toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(v);
+  }
+  return out;
+};
+
+// Themes bundle channels + subreddits + standing topics per domain. Default covers
+// Farcaster (farscout's origin) AND GameStop. Set THEMES to pick your own, e.g.
+// THEMES=farcaster or THEMES=gamestop. Explicit WATCH_*/STANDING_TOPICS merge on top.
+const themeNames = list(process.env.THEMES).length ? list(process.env.THEMES) : ['farcaster', 'gamestop'];
+const themed = resolveThemes(themeNames);
 
 export const config = {
+  themes: themeNames,
+  knownThemes: KNOWN_THEMES,
   discordToken: process.env.DISCORD_TOKEN,
   discordUserId: process.env.DISCORD_USER_ID,
   openrouterKey: process.env.OPENROUTER_API_KEY,
@@ -10,11 +30,10 @@ export const config = {
   ollamaUrl: process.env.OLLAMA_TUNNEL_URL || '',
   ollamaModel: process.env.OLLAMA_MODEL || 'llama3.1',
   fid: process.env.FARCASTER_FID,
-  watchChannels: list(process.env.WATCH_CHANNELS),
+  // Theme channels/subreddits/topics + any explicit env additions (merged, deduped).
+  watchChannels: mergeCI(themed.channels, list(process.env.WATCH_CHANNELS)),
   watchFids: list(process.env.WATCH_FIDS),
-  standingTopics: list(process.env.STANDING_TOPICS).length
-    ? list(process.env.STANDING_TOPICS)
-    : ['farcaster-mini-apps', 'farcaster-frames-v2', 'farcaster-snaps'],
+  standingTopics: mergeCI(themed.standingTopics, list(process.env.STANDING_TOPICS)),
   // Free, no-auth Warpcast public API. (HAATZ_BASE kept for back-compat override.)
   haatzBase: process.env.FARCASTER_API_BASE || process.env.HAATZ_BASE || 'https://api.warpcast.com',
   neynarKey: process.env.NEYNAR_API_KEY || '',
@@ -26,7 +45,7 @@ export const config = {
   redditBase: process.env.REDDIT_API_BASE || 'https://www.reddit.com',
   // Reddit throttles generic User-Agents hard - send a descriptive one.
   redditUserAgent: process.env.REDDIT_USER_AGENT || 'farscout research scout (+https://github.com/bettercallzaal/farscout)',
-  watchSubreddits: list(process.env.WATCH_SUBREDDITS),
+  watchSubreddits: mergeCI(themed.subreddits, list(process.env.WATCH_SUBREDDITS)),
   watchRedditors: list(process.env.WATCH_REDDITORS),
   hubUrl: process.env.HUB_URL || '', // optional public Farcaster hub fallback (#6)
   briefSampleMax: Number(process.env.BRIEF_SAMPLE_MAX) || 150, // follows loaded for /brief rotation

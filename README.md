@@ -64,8 +64,20 @@ tick -> read Farcaster (own casts + channels + watched FIDs)
 | `lib/http.js` | `fetchWithBackoff` (429/5xx + timeout), `isPublicHttpUrl` SSRF guard, `htmlToText` | any outbound fetch |
 | `lib/util.js` | `parseJson` (brace-matching, fence-stripping), `toLines`, `toSlugs`, `canonicalize`, `tokenOverlap` | robust LLM-JSON parsing |
 | `lib/cadence.js` | Adaptive interval (30 min floor, 24 h ceiling, 6 h start) | engagement-scaled timing |
+| `lib/themes.js` | Named theme bundles (channels + subreddits + standing topics); `resolveThemes` merges several into one watch set | covering multiple domains at once |
 
 Every module takes an injected `fetchImpl` (dependency injection) so it's unit-testable with `node:test` and reusable outside this bot.
+
+### Themes (multi-domain coverage)
+
+A **theme** is a named bundle of read surfaces + standing topics for one domain. `THEMES` (default `farcaster,gamestop`) selects which to run; `resolveThemes` in `lib/themes.js` merges them into one deduped watch set, and explicit `WATCH_*`/`STANDING_TOPICS` env values merge on top.
+
+| Theme | Farcaster channels | Subreddits | Standing topics |
+|-------|--------------------|-----------|-----------------|
+| `farcaster` | zao, dev, miniapps | farcaster | farcaster-mini-apps, farcaster-frames-v2, farcaster-snaps |
+| `gamestop` | (none) | Superstonk, GME, gamestop | gamestop-stock, gamestop-crypto-wallet, gamestop-nft-marketplace |
+
+Add a theme by dropping a preset into `THEME_PRESETS`. `/themes` shows the live set.
 
 ---
 
@@ -79,6 +91,7 @@ Registered as native Discord slash commands (show in the `/` picker with descrip
 | `/ask <question>` | Grounded answer with sources via the full research pipeline |
 | `/dig <topic>` | Deep on-demand research on any topic |
 | `/now` | Run a research cycle immediately |
+| `/themes` | Show the active themes and the channels/subreddits/topics they watch |
 | `/digest` | Send the weekly storyline digest now |
 | `/pause` / `/resume` | Stop / resume the autonomous cycle |
 
@@ -113,13 +126,14 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 |-----|-------|
 | `DISCORD_TOKEN` | Developer Portal -> your app -> Bot -> Reset Token. Enable Message Content intent (for text fallback). |
 | `DISCORD_USER_ID` | Your Discord user id (Developer Mode -> right-click name -> Copy User ID). DM the bot once so it can DM you back. |
+| `THEMES` | Comma-list of domains to cover. Default `farcaster,gamestop`. Each theme bundles channels + subreddits + standing topics (see `lib/themes.js`). Known: `farcaster`, `gamestop`. Pick a subset or list your own; `WATCH_*`/`STANDING_TOPICS` below merge on top. |
 | `FARCASTER_FID` | Your Farcaster FID (number; on your Warpcast profile). Seeds the whole loop + `/brief`. |
 | `OPENROUTER_API_KEY` | openrouter.ai -> Keys. Add ~$10 credit to lift free-model rate limits. |
 | `FREE_MODEL_IDS` | Comma-list of OpenRouter `:free` ids to rotate. Live-good set: `openai/gpt-oss-120b:free,z-ai/glm-4.5-air:free,moonshotai/kimi-k2.6:free,nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free,meta-llama/llama-3.3-70b-instruct:free` |
 | `OLLAMA_TUNNEL_URL` | Optional. Public URL of a local Ollama (cloudflared/ngrok to `:11434`). Set this OR OpenRouter. On the VPS leave blank (no Ollama there). |
-| `WATCH_CHANNELS` | Comma-list of channel ids, e.g. `zao,dev,miniapps`. |
+| `WATCH_CHANNELS` | Comma-list of channel ids, e.g. `zao,dev,miniapps`. Merges with the active themes' channels. |
 | `WATCH_FIDS` | Optional. Comma-list of builder FIDs to track. |
-| `STANDING_TOPICS` | Always-researched. Default `farcaster-mini-apps,farcaster-frames-v2,farcaster-snaps`. |
+| `STANDING_TOPICS` | Always-researched topics, merged with the active themes' standing topics. Themes already cover the defaults. |
 | `NEYNAR_API_KEY` | Optional free tier. Enables `WATCH_CHANNELS` (Warpcast has no free channel feed). Without it, channels are skipped. |
 | `WATCH_SUBREDDITS` | Comma-list of subreddits to read each cycle, e.g. `ethereum,CryptoCurrency,farcaster`. Free, no auth. Empty = no Reddit read surface. |
 | `WATCH_REDDITORS` | Optional. Comma-list of Reddit usernames to track (their recent submissions). |

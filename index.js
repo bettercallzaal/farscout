@@ -145,6 +145,15 @@ async function main() {
       } else if (cmd === 'now') {
         await say('Running a cycle now...');
         await tick(say);
+      } else if (cmd === 'themes') {
+        const parts = [
+          `Active themes: ${config.themes.join(', ') || '(none)'}`,
+          `Farcaster channels: ${config.watchChannels.join(', ') || '(none)'}`,
+          `Subreddits: ${config.watchSubreddits.join(', ') || '(none)'}`,
+          `Standing topics: ${config.standingTopics.join(', ') || '(none)'}`,
+          `Known themes: ${config.knownThemes.join(', ')} (set THEMES to choose)`,
+        ];
+        await say(parts.join('\n'));
       } else if (cmd === 'dig') {
         const topic = rest.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
         if (!topic) {
@@ -170,7 +179,7 @@ async function main() {
         const res = await researchTopic({ brain, search, topic: q, seedUrls: [], enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
         await say(formatResult(res) || `No grounded answer for "${q}" (no usable sources).`);
       } else {
-        await say(`Unknown command /${cmd}. Try /brief, /ask, /now, /dig, /digest, /pause, /resume.`);
+        await say(`Unknown command /${cmd}. Try /brief, /ask, /now, /dig, /themes, /digest, /pause, /resume.`);
       }
     },
   });
@@ -226,7 +235,7 @@ async function main() {
   }
 
   await discord.start();
-  await discord.deliver('farscout online. /brief for your network digest, /ask <q> for a grounded answer, /dig <topic> for deep research. Reply any time to speed me up; stay quiet and I idle toward once a day.');
+  await discord.deliver(`farscout online (themes: ${config.themes.join(', ')}). /brief for your network digest, /ask <q> for a grounded answer, /dig <topic> for deep research, /themes to see what I'm watching. Reply any time to speed me up; stay quiet and I idle toward once a day.`);
   schedule();
 }
 

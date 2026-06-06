@@ -4,6 +4,7 @@ Notable changes to farscout. Dates are when the work landed on `main`. Newest fi
 
 ## 2026-06-06
 
+- **Themes (multi-domain coverage).** New `lib/themes.js` with named theme presets that bundle Farcaster channels + subreddits + standing topics per domain. `THEMES` env (default `farcaster,gamestop`) selects which to run; `resolveThemes` merges them into one deduped watch set, and explicit `WATCH_*`/`STANDING_TOPICS` merge on top. Ships `farcaster` and `gamestop` presets (Superstonk/GME/gamestop subs + GME standing topics). New `/themes` Discord command shows the live set. 6 new tests.
 - **Reddit source (read surface + grounding).** New `lib/reddit.js` reads the free, no-auth Reddit JSON API: `subredditFeed` (watched subreddits, parallel to Farcaster channels) and `userPosts` (watched redditors). Posts are normalized into the cast shape (score->likes, comments->recasts) so they feed the same engagement-ranked topic loop with no special-casing. `lib/search.js` gains `searchReddit`, making Reddit threads citable grounding sources. Config: `WATCH_SUBREDDITS`, `WATCH_REDDITORS`, `REDDIT_ENABLED` (default on), `REDDIT_USER_AGENT`, `REDDIT_API_BASE`. Farcaster is untouched - Reddit is purely additive. 12 new tests (93 total). Reddit needs a descriptive User-Agent or it 429s; NSFW dropped by default.
 
 ## 2026-05-31
