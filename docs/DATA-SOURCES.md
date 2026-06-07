@@ -41,6 +41,16 @@ Posts are normalized into the **same shape as a Farcaster cast** (`text`/`author
 
 Reddit grounding (search) is ON by default; the read surfaces (`WATCH_SUBREDDITS`, `WATCH_REDDITORS`) activate only when configured. `REDDIT_ENABLED=0` turns the whole source off.
 
+## X / Twitter - two very different reliability tiers
+
+**Tier 1 - scrape a GIVEN post (free, reliable, no auth).** `GET https://cdn.syndication.twimg.com/tweet-result?id=<id>&token=<token>&lang=en`. This is the public syndication CDN behind embedded tweets (the same endpoint Vercel's `react-tweet` uses). The `token` is derived from the id (`lib/x.js` `getToken`, the react-tweet algorithm). Returns full tweet JSON: `text`, `user.screen_name`, `favorite_count`, `retweet_count`, `created_at`, `entities.urls`, `mediaDetails`. `favorite_count` -> `reactions.likes`, `retweet_count` -> `reactions.recasts`. A private/deleted post comes back as a `TweetTombstone` (we return null). This powers `/x <url>` and the `fetchUrl` hydration below.
+
+**`fetchUrl` X-awareness:** a direct GET of an `x.com` page returns a JS shell / login wall, useless for grounding. So `lib/search.js` `fetchUrl` detects any `x.com|twitter.com/.../status/<id>` URL and routes it to the syndication CDN, returning the real tweet text. This means any X link that shows up in a cast, a Reddit post, or a web-search result gets grounded properly with zero config.
+
+**Tier 2 - search / timeline (NOT reliably free).** There is no free X search or timeline API anymore. The only no-auth route is a Nitter instance, and the 2026 public instances are mostly dead/blocked. So `makeX().searchX` / `timeline` and `search.searchX` read Nitter RSS (`<nitter>/search/rss?q=`, `<nitter>/<handle>/rss`) and are a clean no-op unless `NITTER_BASE` is set - wired but OFF by default, exactly like the Farcaster `HUB_URL` fallback. Point `NITTER_BASE` at a working instance (public or self-hosted) and X search + watched-handle reads light up with no code change. RSS carries no engagement counts, so Nitter-sourced posts default to 0 likes/recasts.
+
+`X_ENABLED=0` turns the whole source off (including the always-free post scrape).
+
 ## Web search - free fallback chain
 
 1. **Exa** (`https://api.exa.ai/search`, POST, `x-api-key`) - only if `EXA_API_KEY` set. Best quality, ~1000 free req/mo.

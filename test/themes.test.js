@@ -12,6 +12,9 @@ test('resolveThemes merges multiple themes (farcaster + gamestop)', () => {
   assert.ok(r.standingTopics.includes('gamestop-stock'));
   // Farcaster subreddit also there.
   assert.ok(r.subreddits.includes('farcaster'));
+  // X handles from both themes merge in.
+  assert.ok(r.xHandles.includes('dwr'));
+  assert.ok(r.xHandles.includes('GameStop'));
 });
 
 test('resolveThemes is case-insensitive on theme names', () => {

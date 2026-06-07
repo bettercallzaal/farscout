@@ -57,6 +57,15 @@ Live-good `FREE_MODEL_IDS` (verified 2026-05): `openai/gpt-oss-120b:free,z-ai/gl
 | `REDDIT_USER_AGENT` | descriptive default | Reddit throttles generic UAs (HTTP 429); override if you like. |
 | `REDDIT_API_BASE` | `https://www.reddit.com` | Override the Reddit base. |
 
+## X / Twitter
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `X_ENABLED` | on | Set `0` to disable X entirely. Scraping a given post (`/x`, link hydration) via the no-auth syndication CDN is free and reliable; that's the always-on value. |
+| `WATCH_X_HANDLES` | (from themes) | X handles to read each cycle, merged with the active themes' handles. Only active with `NITTER_BASE` set. |
+| `NITTER_BASE` | `` | A working Nitter instance enables X search + timeline reads (no free X API otherwise). OFF by default - 2026 public instances are mostly dead/blocked. Wired like `HUB_URL`. |
+| `X_USER_AGENT` | descriptive default | UA for the syndication CDN / Nitter requests. |
+
 ## Grounding
 
 | Key | Default | Notes |

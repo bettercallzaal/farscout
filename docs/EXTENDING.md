@@ -61,6 +61,8 @@ Two flavors, both worked through end-to-end by the Reddit integration (`lib/redd
 - Wire it into `gatherSources` in `lib/research.js` (parallel to `searchCasts`/`webSearch`), or into `webSearch`'s fallback chain.
 - Outbound fetches go through `fetchWithBackoff`; user-derived URLs go through `isPublicHttpUrl`.
 
+**URL hydration** (when a site's raw HTML is useless): some sources (X is the worked example in `lib/x.js`) serve a JS shell / login wall on a direct fetch. If a real text endpoint exists (X's syndication CDN), detect that host in `fetchUrl` (`lib/search.js`) and route it there, returning the real content. This grounds links to that site no matter where they appear, with no config.
+
 ## Add a theme
 
 A theme is a named bundle of read surfaces + standing topics for one domain (see `lib/themes.js`). To add one (e.g. `ethereum`):

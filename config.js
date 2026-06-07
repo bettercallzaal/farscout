@@ -47,6 +47,13 @@ export const config = {
   redditUserAgent: process.env.REDDIT_USER_AGENT || 'farscout research scout (+https://github.com/bettercallzaal/farscout)',
   watchSubreddits: mergeCI(themed.subreddits, list(process.env.WATCH_SUBREDDITS)),
   watchRedditors: list(process.env.WATCH_REDDITORS),
+  // X / Twitter. Scraping a GIVEN post is free + reliable (syndication CDN, no
+  // auth). Continuous search/timeline needs a Nitter instance - off by default
+  // (2026 public instances are mostly dead), wired behind NITTER_BASE like HUB_URL.
+  xEnabled: process.env.X_ENABLED !== '0',
+  nitterBase: process.env.NITTER_BASE || '',
+  xUserAgent: process.env.X_USER_AGENT || 'farscout research scout (+https://github.com/bettercallzaal/farscout)',
+  watchXHandles: mergeCI(themed.xHandles, list(process.env.WATCH_X_HANDLES)),
   hubUrl: process.env.HUB_URL || '', // optional public Farcaster hub fallback (#6)
   briefSampleMax: Number(process.env.BRIEF_SAMPLE_MAX) || 150, // follows loaded for /brief rotation
   // Research depth toggles (#1/#2/#3) - all free, default on for the live loop.
