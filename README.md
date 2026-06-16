@@ -30,9 +30,11 @@ Minimum to run: `DISCORD_TOKEN`, `DISCORD_USER_ID`, `FARCASTER_FID`, and EITHER 
 
 ```
 tick -> read Farcaster (own casts + channels + watched FIDs)
+        + read Reddit (watched subreddits + watched redditors)
+        + read X (watched handles, if a Nitter instance is configured)
      -> rank by engagement -> extract topics (light model) + standing topics
      -> NOVELTY TRIAGE (traction + novelty + token-signal; dedup; top 3)
-     -> per topic: GROUND (cast search + web search + URL/Jina-reader fetch
+     -> per topic: GROUND (cast search + Reddit search + X search + web search + URL/Jina-reader fetch
                            + $ticker market data + Frame/Mini-App detect)
      -> [perspectives] decompose into market/tech/social angles
      -> TWO-PASS SYNTHESIS (extract claims [light] -> synthesize insights [heavy])
@@ -51,7 +53,9 @@ tick -> read Farcaster (own casts + channels + watched FIDs)
 | `index.js` | Orchestrator: boot, Discord command surface, tick loop, digest, cadence persistence | the wiring example |
 | `config.js` | Env config + `requireConfig` (Ollama-OR-OpenRouter validation) | add new env knobs here |
 | `lib/reader.js` | Warpcast reads (`/v2/casts`, `/v1/channel-casts` via Neynar, `followingFids` graph, watched FIDs), `normalizeCast`, `castWeight`, hub fallback | any Farcaster read |
-| `lib/search.js` | Grounding: cast search, web search (Exa -> Jina -> DuckDuckGo chain), `fetchUrl` (+ Jina Reader), `detectFrame` | any grounded lookup |
+| `lib/reddit.js` | Reddit reads on the free no-auth JSON API: `subredditFeed`, `userPosts`, `normalizePost` into the cast shape (score->likes, comments->recasts) | any Reddit read |
+| `lib/x.js` | X / Twitter: `fetchXPost` (single post via the free syndication CDN, no auth), `makeX` timeline/search via optional Nitter, `normalizeTweet` into the cast shape | scraping a given X post |
+| `lib/search.js` | Grounding: cast search, Reddit search, X search, web search (Exa -> Jina -> DuckDuckGo chain), `fetchUrl` (+ Jina Reader, + X syndication hydration), `detectFrame` | any grounded lookup |
 | `lib/enrich.js` | Crypto enrichment: `extractTickers`, Dexscreener `marketFacts` (price/liq/vol/FDV) | any token-aware feature |
 | `lib/triage.js` | Novelty triage: `scoreTopic`, `triage` (traction + novelty + dedup) | ranking what to work on |
 | `lib/research.js` | `gatherSignal`, `gatherSources`, `researchTopic` (two-pass + reflect + verify + perspectives), `runCycle` | the research engine |
@@ -62,8 +66,22 @@ tick -> read Farcaster (own casts + channels + watched FIDs)
 | `lib/http.js` | `fetchWithBackoff` (429/5xx + timeout), `isPublicHttpUrl` SSRF guard, `htmlToText` | any outbound fetch |
 | `lib/util.js` | `parseJson` (brace-matching, fence-stripping), `toLines`, `toSlugs`, `canonicalize`, `tokenOverlap` | robust LLM-JSON parsing |
 | `lib/cadence.js` | Adaptive interval (30 min floor, 24 h ceiling, 6 h start) | engagement-scaled timing |
+| `lib/themes.js` | Named theme bundles (channels + subreddits + standing topics); `resolveThemes` merges several into one watch set | covering multiple domains at once |
 
 Every module takes an injected `fetchImpl` (dependency injection) so it's unit-testable with `node:test` and reusable outside this bot.
+
+### Themes (multi-domain coverage)
+
+A **theme** is a named bundle of read surfaces + standing topics for one domain. `THEMES` (default `farcaster,gamestop`) selects which to run; `resolveThemes` in `lib/themes.js` merges them into one deduped watch set, and explicit `WATCH_*`/`STANDING_TOPICS` env values merge on top.
+
+| Theme | Farcaster channels | Subreddits | X handles | Standing topics |
+|-------|--------------------|-----------|-----------|-----------------|
+| `farcaster` | zao, dev, miniapps | farcaster | farcaster_xyz, dwr | farcaster-mini-apps, farcaster-frames-v2, farcaster-snaps |
+| `gamestop` | (none) | Superstonk, GME, gamestop | GameStop, gstopcorp | gamestop-stock, gamestop-crypto-wallet, gamestop-nft-marketplace |
+
+(X handles only feed the loop if `NITTER_BASE` is set; the `/x` command and X-link hydration work regardless.)
+
+Add a theme by dropping a preset into `THEME_PRESETS`. `/themes` shows the live set.
 
 ---
 
@@ -76,7 +94,9 @@ Registered as native Discord slash commands (show in the `/` picker with descrip
 | `/brief` | Curated digest of what the accounts **you follow** are talking about (the flagship) |
 | `/ask <question>` | Grounded answer with sources via the full research pipeline |
 | `/dig <topic>` | Deep on-demand research on any topic |
+| `/x <url\|id>` | Scrape a given X / Twitter post (free, no auth) and research it grounded on the post |
 | `/now` | Run a research cycle immediately |
+| `/themes` | Show the active themes and the channels/subreddits/topics they watch |
 | `/digest` | Send the weekly storyline digest now |
 | `/pause` / `/resume` | Stop / resume the autonomous cycle |
 
@@ -92,6 +112,10 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 | Cast search | Warpcast | yes | no | `GET /v2/search-casts?q=clanker&limit=8` |
 | Follow graph | Warpcast | yes | no | `GET /v2/following?fid=19640&limit=50` (cap 50/page) |
 | Channels (optional) | Neynar v2 | free key | yes | `GET https://api.neynar.com/v2/farcaster/feed/channels?channel_ids=zao` |
+| Reddit read | Reddit JSON | yes | no | `GET https://www.reddit.com/r/ethereum/hot.json?limit=25` |
+| Reddit search | Reddit JSON | yes | no | `GET https://www.reddit.com/search.json?q=farcaster&limit=8` |
+| X post scrape | X syndication CDN | yes | no | `GET https://cdn.syndication.twimg.com/tweet-result?id=<id>&token=<t>` |
+| X search/timeline | Nitter | yes* | no | `GET <nitter>/search/rss?q=gme` (needs a live instance; off by default) |
 | Web search | Jina `s.jina.ai` | 10M tokens | no | `GET https://s.jina.ai/?q=farcaster+mini+apps` |
 | Page read | Jina `r.jina.ai` | shared | no | `GET https://r.jina.ai/https://docs.farcaster.xyz/` |
 | Crypto data | Dexscreener | yes | no | `GET https://api.dexscreener.com/latest/dex/search?q=clanker` |
@@ -101,6 +125,8 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 
 \* OpenRouter free models are a shared, rate-limited pool. A one-time ~$10 credit lifts `:free` limits and kills most 429s; findings still cost ~$0.
 
+\* X search/timeline needs a live Nitter instance (`NITTER_BASE`) - there is no free X search API and 2026 public instances are mostly dead, so it ships OFF. Scraping a *given* post (the `/x` command, and auto-hydrating any `x.com/status` link that turns up in casts/Reddit/web results) uses the no-auth syndication CDN and always works.
+
 ---
 
 ## Env keys
@@ -109,14 +135,24 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 |-----|-------|
 | `DISCORD_TOKEN` | Developer Portal -> your app -> Bot -> Reset Token. Enable Message Content intent (for text fallback). |
 | `DISCORD_USER_ID` | Your Discord user id (Developer Mode -> right-click name -> Copy User ID). DM the bot once so it can DM you back. |
+| `THEMES` | Comma-list of domains to cover. Default `farcaster,gamestop`. Each theme bundles channels + subreddits + standing topics (see `lib/themes.js`). Known: `farcaster`, `gamestop`. Pick a subset or list your own; `WATCH_*`/`STANDING_TOPICS` below merge on top. |
 | `FARCASTER_FID` | Your Farcaster FID (number; on your Warpcast profile). Seeds the whole loop + `/brief`. |
 | `OPENROUTER_API_KEY` | openrouter.ai -> Keys. Add ~$10 credit to lift free-model rate limits. |
 | `FREE_MODEL_IDS` | Comma-list of OpenRouter `:free` ids to rotate. Live-good set: `openai/gpt-oss-120b:free,z-ai/glm-4.5-air:free,moonshotai/kimi-k2.6:free,nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free,meta-llama/llama-3.3-70b-instruct:free` |
 | `OLLAMA_TUNNEL_URL` | Optional. Public URL of a local Ollama (cloudflared/ngrok to `:11434`). Set this OR OpenRouter. On the VPS leave blank (no Ollama there). |
-| `WATCH_CHANNELS` | Comma-list of channel ids, e.g. `zao,dev,miniapps`. |
+| `WATCH_CHANNELS` | Comma-list of channel ids, e.g. `zao,dev,miniapps`. Merges with the active themes' channels. |
 | `WATCH_FIDS` | Optional. Comma-list of builder FIDs to track. |
-| `STANDING_TOPICS` | Always-researched. Default `farcaster-mini-apps,farcaster-frames-v2,farcaster-snaps`. |
+| `STANDING_TOPICS` | Always-researched topics, merged with the active themes' standing topics. Themes already cover the defaults. |
 | `NEYNAR_API_KEY` | Optional free tier. Enables `WATCH_CHANNELS` (Warpcast has no free channel feed). Without it, channels are skipped. |
+| `WATCH_SUBREDDITS` | Comma-list of subreddits to read each cycle, e.g. `ethereum,CryptoCurrency,farcaster`. Free, no auth. Empty = no Reddit read surface. |
+| `WATCH_REDDITORS` | Optional. Comma-list of Reddit usernames to track (their recent submissions). |
+| `REDDIT_ENABLED` | Reddit on by default. Set to `0` to disable Reddit reads AND Reddit grounding entirely. |
+| `REDDIT_USER_AGENT` | Reddit throttles generic User-Agents (HTTP 429); a descriptive default is set. Override if you like. |
+| `REDDIT_API_BASE` | Override the Reddit base (default `https://www.reddit.com`). |
+| `X_ENABLED` | X on by default. Scraping a given post (`/x`, link hydration) is free + reliable. Set `0` to disable X entirely. |
+| `WATCH_X_HANDLES` | Comma-list of X handles to read each cycle. Only active with `NITTER_BASE` set; merges with the active themes' handles. |
+| `NITTER_BASE` | Point at a working Nitter instance to enable X search + timeline reads. Off by default (no free X search API; 2026 public instances mostly dead). |
+| `X_USER_AGENT` | UA for X/Nitter requests; a descriptive default is set. |
 | `EXA_API_KEY` | Optional. Better web grounding; blank = Jina then DuckDuckGo. |
 | `BONFIRE_API_KEY`, `BONFIRE_ID` | From `~/.zao/zao.env`. Memory layer; degrades to local-only if absent. |
 | `HUB_URL` | Optional public Farcaster hub HTTP base for a free user-cast fallback. OFF by default - the 2026 public hubs tested (NodeRPC, Pinata) were unreachable. |

@@ -21,6 +21,36 @@ Base `https://api.warpcast.com`. Free, no auth for reads.
 
 `https://api.neynar.com/v2/farcaster/feed/channels?channel_ids=` with header `api_key:`. Free tier ~300 rpm. Only used when `NEYNAR_API_KEY` is set, because **no provider offers a free unauthenticated channel feed** (Warpcast 200s with an empty list).
 
+## Reddit reads + search - public JSON API
+
+Base `https://www.reddit.com`. Free, no auth: append `.json` to any page.
+
+| Endpoint | Use | Quirk |
+|----------|-----|-------|
+| `GET /r/<sub>/<sort>.json?limit=&raw_json=1` | subreddit feed (read surface) | `sort` = hot\|new\|top\|rising; shape `{data:{children:[{kind:'t3',data}]}}` |
+| `GET /user/<name>/submitted.json?limit=&sort=new` | a redditor's posts (watch surface) | same listing shape |
+| `GET /search.json?q=&limit=&sort=relevance&t=year` | Reddit search (grounding) | threads become citable sources |
+
+Posts are normalized into the **same shape as a Farcaster cast** (`text`/`author`/`hash`/`timestamp`/`embeds`/`reactions`), so they slot into the engagement-ranked corpus with no special-casing: `score` (upvotes) -> `reactions.likes`, `num_comments` -> `reactions.recasts`. A link post's external URL becomes an `embed` (a seed URL for grounding); self posts do not.
+
+**Quirks discovered:**
+- **User-Agent is mandatory.** A generic/default UA gets throttled hard (HTTP 429) or served an HTML block page instead of JSON. farscout always sends a descriptive `REDDIT_USER_AGENT`.
+- `raw_json=1` stops Reddit HTML-escaping `&`/`<`/`>` in body text.
+- NSFW posts (`over_18`) are dropped by default (`includeNsfw` to keep them).
+- OAuth (`oauth.reddit.com`) is NOT used - it needs a registered app + token. The `www.reddit.com/*.json` reads are enough and free. Rate limit is generous (~tens/min) with a good UA; the shared `fetchWithBackoff` handles the 429s.
+
+Reddit grounding (search) is ON by default; the read surfaces (`WATCH_SUBREDDITS`, `WATCH_REDDITORS`) activate only when configured. `REDDIT_ENABLED=0` turns the whole source off.
+
+## X / Twitter - two very different reliability tiers
+
+**Tier 1 - scrape a GIVEN post (free, reliable, no auth).** `GET https://cdn.syndication.twimg.com/tweet-result?id=<id>&token=<token>&lang=en`. This is the public syndication CDN behind embedded tweets (the same endpoint Vercel's `react-tweet` uses). The `token` is derived from the id (`lib/x.js` `getToken`, the react-tweet algorithm). Returns full tweet JSON: `text`, `user.screen_name`, `favorite_count`, `retweet_count`, `created_at`, `entities.urls`, `mediaDetails`. `favorite_count` -> `reactions.likes`, `retweet_count` -> `reactions.recasts`. A private/deleted post comes back as a `TweetTombstone` (we return null). This powers `/x <url>` and the `fetchUrl` hydration below.
+
+**`fetchUrl` X-awareness:** a direct GET of an `x.com` page returns a JS shell / login wall, useless for grounding. So `lib/search.js` `fetchUrl` detects any `x.com|twitter.com/.../status/<id>` URL and routes it to the syndication CDN, returning the real tweet text. This means any X link that shows up in a cast, a Reddit post, or a web-search result gets grounded properly with zero config.
+
+**Tier 2 - search / timeline (NOT reliably free).** There is no free X search or timeline API anymore. The only no-auth route is a Nitter instance, and the 2026 public instances are mostly dead/blocked. So `makeX().searchX` / `timeline` and `search.searchX` read Nitter RSS (`<nitter>/search/rss?q=`, `<nitter>/<handle>/rss`) and are a clean no-op unless `NITTER_BASE` is set - wired but OFF by default, exactly like the Farcaster `HUB_URL` fallback. Point `NITTER_BASE` at a working instance (public or self-hosted) and X search + watched-handle reads light up with no code change. RSS carries no engagement counts, so Nitter-sourced posts default to 0 likes/recasts.
+
+`X_ENABLED=0` turns the whole source off (including the always-free post scrape).
+
 ## Web search - free fallback chain
 
 1. **Exa** (`https://api.exa.ai/search`, POST, `x-api-key`) - only if `EXA_API_KEY` set. Best quality, ~1000 free req/mo.

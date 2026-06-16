@@ -30,16 +30,41 @@ Plus a reasoning backend - **one of**:
 
 Live-good `FREE_MODEL_IDS` (verified 2026-05): `openai/gpt-oss-120b:free,z-ai/glm-4.5-air:free,moonshotai/kimi-k2.6:free,nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free,meta-llama/llama-3.3-70b-instruct:free`. Model ids churn - re-verify if synthesis returns nothing (a dead id returns 404, a saturated one returns a 200-with-429-body).
 
+## Themes
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `THEMES` | `farcaster,gamestop` | Comma-list of domains to cover. Each theme (`lib/themes.js` `THEME_PRESETS`) bundles Farcaster channels + subreddits + standing topics. Known: `farcaster`, `gamestop`. The explicit `WATCH_CHANNELS`/`WATCH_SUBREDDITS`/`STANDING_TOPICS` values below are MERGED on top (deduped, case-insensitive), never replaced. Unknown theme names are ignored. |
+
 ## Farcaster reads
 
 | Key | Default | Notes |
 |-----|---------|-------|
 | `FARCASTER_API_BASE` | `https://api.warpcast.com` | Read API base. `HAATZ_BASE` also honored for back-compat. |
-| `WATCH_CHANNELS` | `zao,dev,miniapps` | Channels to read (needs `NEYNAR_API_KEY`). |
+| `WATCH_CHANNELS` | (from themes) | Extra channels to read on top of the active themes (needs `NEYNAR_API_KEY`). `farcaster` theme provides `zao,dev,miniapps`. |
 | `WATCH_FIDS` | `` | Specific builder FIDs to track. |
-| `STANDING_TOPICS` | `farcaster-mini-apps,farcaster-frames-v2,farcaster-snaps` | Always-researched topics. |
+| `STANDING_TOPICS` | (from themes) | Extra always-researched topics on top of the active themes. |
 | `NEYNAR_API_KEY` | `` | Free tier. Enables `WATCH_CHANNELS` (Warpcast has no free channel feed). Without it, channels are silently skipped. |
 | `HUB_URL` | `` | Public Farcaster hub HTTP base for a free user-cast fallback. OFF by default - 2026 public hubs tested were unreachable. |
+
+## Reddit reads + grounding
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `REDDIT_ENABLED` | on | Set `0` to disable Reddit reads AND Reddit search grounding entirely. |
+| `WATCH_SUBREDDITS` | (from themes) | Extra subreddits to read each cycle on top of the active themes. `gamestop` theme provides `Superstonk,GME,gamestop`. Free, no auth. |
+| `WATCH_REDDITORS` | `` | Optional. Reddit usernames whose recent submissions to track. |
+| `REDDIT_USER_AGENT` | descriptive default | Reddit throttles generic UAs (HTTP 429); override if you like. |
+| `REDDIT_API_BASE` | `https://www.reddit.com` | Override the Reddit base. |
+
+## X / Twitter
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `X_ENABLED` | on | Set `0` to disable X entirely. Scraping a given post (`/x`, link hydration) via the no-auth syndication CDN is free and reliable; that's the always-on value. |
+| `WATCH_X_HANDLES` | (from themes) | X handles to read each cycle, merged with the active themes' handles. Only active with `NITTER_BASE` set. |
+| `NITTER_BASE` | `` | A working Nitter instance enables X search + timeline reads (no free X API otherwise). OFF by default - 2026 public instances are mostly dead/blocked. Wired like `HUB_URL`. |
+| `X_USER_AGENT` | descriptive default | UA for the syndication CDN / Nitter requests. |
 
 ## Grounding
 

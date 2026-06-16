@@ -13,6 +13,79 @@ test('searchCasts normalizes results with warpcast urls', async () => {
   assert.equal(hits[0].snippet, 'about frames');
 });
 
+test('searchReddit returns threads as citable sources with reddit.com urls', async () => {
+  let seen;
+  const fetchImpl = async (url, opts) => {
+    seen = { url, ua: opts.headers?.['user-agent'] };
+    return okJson({ data: { children: [
+      { data: { subreddit: 'farcaster', title: 'Mini apps are taking off', selftext: 'long body', permalink: '/r/farcaster/comments/x/mini/' } },
+    ] } });
+  };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl, redditUserAgent: 'UA-Z' });
+  const hits = await search.searchReddit('mini apps');
+  assert.match(seen.url, /reddit\.com\/search\.json\?q=mini%20apps/);
+  assert.equal(seen.ua, 'UA-Z');
+  assert.equal(hits[0].source, 'reddit');
+  assert.equal(hits[0].url, 'https://www.reddit.com/r/farcaster/comments/x/mini/');
+  assert.match(hits[0].title, /^r\/farcaster:/);
+});
+
+test('searchReddit is a no-op when reddit is disabled', async () => {
+  let called = false;
+  const fetchImpl = async () => { called = true; return okJson({}); };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl, redditEnabled: false });
+  assert.deepEqual(await search.searchReddit('anything'), []);
+  assert.equal(called, false);
+});
+
+test('searchReddit fails soft on a non-ok response', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 429, headers: { get: () => null }, json: async () => ({}) });
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  assert.deepEqual(await search.searchReddit('x'), []);
+});
+
+test('searchX is a no-op without a Nitter base (no free X search API)', async () => {
+  let called = false;
+  const fetchImpl = async () => { called = true; return okJson({}); };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  assert.deepEqual(await search.searchX('gme'), []);
+  assert.equal(called, false);
+});
+
+test('searchX reads Nitter RSS when a base is set', async () => {
+  const rss = '<rss><channel><item><title>GME to the moon</title><link>https://nitter.net/ape/status/99#m</link><dc:creator>@ape</dc:creator></item></channel></rss>';
+  const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => rss });
+  const search = makeSearch({ base: 'https://h.test', fetchImpl, nitterBase: 'https://nitter.net' });
+  const hits = await search.searchX('gme');
+  assert.equal(hits[0].source, 'x');
+  assert.equal(hits[0].url, 'https://x.com/ape/status/99');
+  assert.match(hits[0].title, /@ape on X/);
+});
+
+test('fetchUrl hydrates an X post via the syndication CDN, not a login wall', async () => {
+  let seen;
+  const fetchImpl = async (url) => {
+    seen = url;
+    return okJson({ id_str: '20', text: 'real tweet text', user: { screen_name: 'jack' }, favorite_count: 9 });
+  };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  const r = await search.fetchUrl('https://x.com/jack/status/20');
+  assert.match(seen, /cdn\.syndication\.twimg\.com\/tweet-result/);
+  assert.equal(r.status, 'FULL');
+  assert.match(r.text, /real tweet text/);
+});
+
+test('fetchUrl falls through to normal fetch when X hydration fails', async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes('syndication')) return { ok: false, status: 404, headers: { get: () => null }, json: async () => ({}) };
+    return { ok: true, status: 200, headers: { get: () => null }, text: async () => '<html><body>fallback body text that is long enough to count as content for grounding purposes here</body></html>' };
+  };
+  const search = makeSearch({ base: 'https://h.test', fetchImpl });
+  const r = await search.fetchUrl('https://x.com/jack/status/20');
+  assert.equal(r.status, 'FULL');
+  assert.match(r.text, /fallback body text/);
+});
+
 test('webSearch uses exa when key present', async () => {
   let hitExa = false;
   const fetchImpl = async (url) => {

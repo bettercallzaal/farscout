@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { fetch } from 'undici';
 import { config, requireConfig } from './config.js';
 import { makeReader } from './lib/reader.js';
+import { makeReddit } from './lib/reddit.js';
+import { makeX } from './lib/x.js';
 import { makeBrain } from './lib/brain.js';
 import { makeMemory } from './lib/memory.js';
 import { makeSearch } from './lib/search.js';
@@ -52,6 +54,8 @@ async function main() {
   requireConfig();
 
   const reader = makeReader({ base: config.haatzBase, fid: config.fid, fetchImpl: fetch, neynarKey: config.neynarKey, hubUrl: config.hubUrl });
+  const reddit = makeReddit({ base: config.redditBase, fetchImpl: fetch, userAgent: config.redditUserAgent, enabled: config.redditEnabled });
+  const x = makeX({ fetchImpl: fetch, enabled: config.xEnabled, nitterBase: config.nitterBase, userAgent: config.xUserAgent });
   const brain = makeBrain({
     openrouterKey: config.openrouterKey,
     freeModels: config.freeModels,
@@ -67,7 +71,18 @@ async function main() {
     fetchImpl: fetch,
   });
   await memory.load();
-  const search = makeSearch({ base: config.haatzBase, fetchImpl: fetch, neynarKey: config.neynarKey, exaKey: config.exaKey });
+  const search = makeSearch({
+    base: config.haatzBase,
+    fetchImpl: fetch,
+    neynarKey: config.neynarKey,
+    exaKey: config.exaKey,
+    redditEnabled: config.redditEnabled,
+    redditBase: config.redditBase,
+    redditUserAgent: config.redditUserAgent,
+    xEnabled: config.xEnabled,
+    nitterBase: config.nitterBase,
+    xUserAgent: config.xUserAgent,
+  });
   const enrich = createEnrich({ fetchImpl: fetch });
 
   let paused = false;
@@ -135,6 +150,16 @@ async function main() {
       } else if (cmd === 'now') {
         await say('Running a cycle now...');
         await tick(say);
+      } else if (cmd === 'themes') {
+        const parts = [
+          `Active themes: ${config.themes.join(', ') || '(none)'}`,
+          `Farcaster channels: ${config.watchChannels.join(', ') || '(none)'}`,
+          `Subreddits: ${config.watchSubreddits.join(', ') || '(none)'}`,
+          `X handles: ${config.watchXHandles.join(', ') || '(none)'}${config.nitterBase ? '' : ' (needs NITTER_BASE to read)'}`,
+          `Standing topics: ${config.standingTopics.join(', ') || '(none)'}`,
+          `Known themes: ${config.knownThemes.join(', ')} (set THEMES to choose)`,
+        ];
+        await say(parts.join('\n'));
       } else if (cmd === 'dig') {
         const topic = rest.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
         if (!topic) {
@@ -144,6 +169,24 @@ async function main() {
         await say(`Digging into "${topic}"...`);
         const res = await researchTopic({ brain, search, topic, enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
         await say(formatResult(res) || `Nothing solid found for "${topic}" (no usable sources).`);
+      } else if (cmd === 'x') {
+        const ref = rest.trim();
+        if (!ref) {
+          await say('usage: /x <X post URL or id>');
+          return;
+        }
+        await say('Scraping that X post...');
+        const post = await x.fetchPost(ref);
+        if (!post) {
+          await say('Could not scrape that post (private, deleted, or not a valid X post URL/id).');
+          return;
+        }
+        // Research the post, grounded on the post itself (cite-or-drop still applies).
+        const topic = post.text.split(/\s+/).slice(0, 12).join(' ');
+        const res = await researchTopic({ brain, search, topic, seedUrls: [post.url], enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
+        const header = `@${post.author} on X (${post.reactions.likes} likes):\n${post.text}\n${post.url}`;
+        const body = formatResult(res);
+        await say(body ? `${header}\n\n${body}` : header);
       } else if (cmd === 'digest') {
         if (!state.digestLog.length) { await say('Nothing logged yet.'); return; }
         await sendDigest(say);
@@ -160,7 +203,7 @@ async function main() {
         const res = await researchTopic({ brain, search, topic: q, seedUrls: [], enrich, perspectives: config.perspectives, reflect: config.reflect, verify: config.verify });
         await say(formatResult(res) || `No grounded answer for "${q}" (no usable sources).`);
       } else {
-        await say(`Unknown command /${cmd}. Try /brief, /ask, /now, /dig, /digest, /pause, /resume.`);
+        await say(`Unknown command /${cmd}. Try /brief, /ask, /now, /dig, /x, /themes, /digest, /pause, /resume.`);
       }
     },
   });
@@ -177,6 +220,11 @@ async function main() {
         enrich,
         channels: config.watchChannels,
         watchFids: config.watchFids,
+        reddit,
+        subreddits: config.watchSubreddits,
+        watchRedditors: config.watchRedditors,
+        x,
+        xHandles: config.watchXHandles,
         standingTopics: config.standingTopics,
         recentReplies: discord.recentReplies(),
         perspectives: config.perspectives,
@@ -213,7 +261,7 @@ async function main() {
   }
 
   await discord.start();
-  await discord.deliver('farscout online. /brief for your network digest, /ask <q> for a grounded answer, /dig <topic> for deep research. Reply any time to speed me up; stay quiet and I idle toward once a day.');
+  await discord.deliver(`farscout online (themes: ${config.themes.join(', ')}). /brief for your network digest, /ask <q> for a grounded answer, /dig <topic> for deep research, /x <post> to scrape an X post, /themes to see what I'm watching. Reply any time to speed me up; stay quiet and I idle toward once a day.`);
   schedule();
 }
 
