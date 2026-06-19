@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTweetId, isXStatusUrl, getToken, normalizeTweet, parseNitterRss, makeX } from '../lib/x.js';
+import { parseTweetId, isXStatusUrl, getToken, normalizeTweet, parseNitterRss, makeX, fetchXPost } from '../lib/x.js';
 
 const okJson = (body) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body });
 
@@ -114,4 +114,38 @@ test('parseNitterRss skips items with no text and caps at limit', () => {
   const posts = parseNitterRss(rss, 1);
   assert.equal(posts.length, 1);
   assert.equal(posts[0].text, 'one');
+});
+
+
+test('fetchXPost recovers a FULL X Article body via FxTwitter (tier 0)', async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes('api.fxtwitter.com')) {
+      return okJson({ tweet: {
+        id: '20', text: 'preview only', author: { screen_name: 'heynavtoor' },
+        likes: 1208, retweets: 5, created_at: '2026-06-17T10:36:52.000Z',
+        article: { title: 'The Stanford STORM Method', content: { blocks: [
+          { text: 'Most people use Claude like a search box.' }, { text: '' }, { text: 'Save this :)' },
+        ] } },
+      } });
+    }
+    return okJson({}); // syndication would be the fallback, not reached here
+  };
+  const out = await fetchXPost(fetchImpl, 'https://x.com/heynavtoor/status/20');
+  assert.equal(out.isArticle, true);
+  assert.match(out.text, /Stanford STORM Method/);
+  assert.match(out.text, /Save this/);
+  assert.equal(out.author, 'heynavtoor');
+  assert.equal(out.reactions.likes, 1208);
+});
+
+test('fetchXPost falls back to syndication when FxTwitter has no tweet', async () => {
+  let hitSynd = false;
+  const fetchImpl = async (url) => {
+    if (url.includes('api.fxtwitter.com')) return okJson({}); // no .tweet -> null
+    hitSynd = true;
+    return okJson({ id_str: '20', text: 'plain tweet', user: { screen_name: 'x' }, favorite_count: 2 });
+  };
+  const out = await fetchXPost(fetchImpl, 'https://x.com/x/status/200000000000000000');
+  assert.equal(hitSynd, true);
+  assert.equal(out.text, 'plain tweet');
 });
