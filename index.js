@@ -208,8 +208,14 @@ async function main() {
     },
   });
 
+  let running = false;
   async function tick(say = dm) {
     if (paused) return;
+    if (running) {
+      if (say !== dm) await say("A cycle is already running - hang tight.");
+      return;
+    }
+    running = true;
     try {
       await memory.flushQueue();
       const out = await runCycle({
@@ -248,6 +254,7 @@ async function main() {
     } catch (e) {
       console.error('cycle error:', e?.message ?? e);
     } finally {
+      running = false;
       const engaged = discord.consumeEngagement();
       state.interval = nextInterval(state.interval, engaged);
       await saveCadence(CADENCE_FILE, state);
