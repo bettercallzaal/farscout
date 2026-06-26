@@ -7,7 +7,7 @@ It reads Farcaster (your casts, your follow graph, watched builders via the free
 Findings are grounded in real sources, never the model's stale memory - a finding that cannot cite a source URL is dropped. It has a standing watch on Farcaster Mini Apps, Frames, and Snaps.
 
 - **Repo:** github.com/bettercallzaal/farscout
-- **Live:** systemd service `farscout.service` on the ZAO cowork VPS `187.77.3.104` (`/root/farscout`), 24/7, auto-restart, survives reboots.
+- **Live:** systemd service `farscout.service` on the ZAO cowork VPS `31.97.148.88` (`/home/zaal/migrated-cowork/farscout`), 24/7, auto-restart, survives reboots.
 - **Status (2026-05-31):** 29 commits, 11 lib modules, ~1500 LOC, 81 unit tests passing (run on the VPS - see Gotchas), 3 runtime deps.
 
 ---
@@ -164,14 +164,14 @@ Any normal (non-slash) message counts as engagement and tightens the cadence. Fi
 
 ## Deploy (current production = ZAO cowork VPS)
 
-Live on `187.77.3.104` as a systemd `--user` service. Ops:
+Live on `31.97.148.88` as a systemd `--user` service. Ops:
 
 ```bash
-ssh root@187.77.3.104                         # key: ~/.ssh/id_ed25519
+ssh zaal@31.97.148.88                         # key: ~/.ssh/id_ed25519
 systemctl --user status farscout.service       # state
 journalctl --user -u farscout.service -f       # logs
 # deploy a pushed change:
-cd /root/farscout && git pull && systemctl --user restart farscout.service
+cd /home/zaal/migrated-cowork/farscout && git pull && systemctl --user restart farscout.service
 ```
 
 `loginctl enable-linger root` is set so it survives reboots; `Restart=on-failure` auto-recovers crashes. Reasoning is OpenRouter (cloud) - no Ollama on the box.
@@ -233,7 +233,7 @@ Ranked by leverage. All free unless noted.
 - **Hub fallback shipped OFF** - NodeRPC/Pinata/hoyt all unreachable in 2026; wired but gated behind `HUB_URL` rather than faking a working integration.
 
 **Gotchas / friction (so you don't re-discover them):**
-- **Run tests on the VPS (Node 22), not a Node 23 mac.** discord.js's bundled undici throws `util.deepClone is not a function` / `GatewayIntentBits not found` on Node 23, which breaks any test that imports a discord-touching module. `ssh root@187.77.3.104 'cd /root/farscout && node --test'` is the source of truth.
+- **Run tests on the VPS (Node 22), not a Node 23 mac.** discord.js's bundled undici throws `util.deepClone is not a function` / `GatewayIntentBits not found` on Node 23, which breaks any test that imports a discord-touching module. `ssh zaal@31.97.148.88 'cd /home/zaal/migrated-cowork/farscout && node --test'` is the source of truth.
 - **`saveCadence`/`memory.persist` mkdir the `state/` dir** - a fresh clone has no `state/`; without the mkdir the process crashed on first write (fixed, but if you add a new state file, keep the pattern).
 - **One bot instance per token** - running farscout locally + on the VPS with the same `DISCORD_TOKEN` makes them fight over the Discord gateway. Pick one.
 - **Slash commands**: per-guild register is instant; global (DM/user-install) takes ~1h to propagate and needs User Install enabled.
@@ -242,7 +242,7 @@ Ranked by leverage. All free unless noted.
 
 **Live verify after any change:**
 ```bash
-ssh root@187.77.3.104 'cd /root/farscout && git pull && node --test && systemctl --user restart farscout.service && sleep 6 && systemctl --user is-active farscout.service'
+ssh zaal@31.97.148.88 'cd /home/zaal/migrated-cowork/farscout && git pull && node --test && systemctl --user restart farscout.service && sleep 6 && systemctl --user is-active farscout.service'
 ```
 
 ---

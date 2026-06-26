@@ -4,9 +4,9 @@ Running, deploying, and debugging farscout in production. Current production is 
 
 ## Where it runs
 
-- **Host:** `root@187.77.3.104` (Hostinger VPS, also runs Iman's ZAOcoworkingBot - shared box, be considerate).
+- **Host:** `zaal@31.97.148.88` (Hostinger VPS, also runs Iman's ZAOcoworkingBot - shared box, be considerate).
 - **SSH key:** `~/.ssh/id_ed25519`
-- **Path:** `/root/farscout`
+- **Path:** `/home/zaal/migrated-cowork/farscout`
 - **Service:** `farscout.service` (systemd user unit), linger enabled so it survives reboots.
 - **Runtime:** Node 22, reasoning via OpenRouter (no Ollama on the box).
 
@@ -14,19 +14,19 @@ Running, deploying, and debugging farscout in production. Current production is 
 
 ```bash
 # is it alive?
-ssh root@187.77.3.104 'systemctl --user is-active farscout.service'
+ssh zaal@31.97.148.88 'systemctl --user is-active farscout.service'
 
 # full status + uptime + restart count
-ssh root@187.77.3.104 'systemctl --user status farscout.service'
+ssh zaal@31.97.148.88 'systemctl --user status farscout.service'
 
 # tail logs live
-ssh root@187.77.3.104 'journalctl --user -u farscout.service -f'
+ssh zaal@31.97.148.88 'journalctl --user -u farscout.service -f'
 
 # last 50 log lines
-ssh root@187.77.3.104 'journalctl --user -u farscout.service -n 50 --no-pager'
+ssh zaal@31.97.148.88 'journalctl --user -u farscout.service -n 50 --no-pager'
 
 # restart
-ssh root@187.77.3.104 'systemctl --user restart farscout.service'
+ssh zaal@31.97.148.88 'systemctl --user restart farscout.service'
 ```
 
 ## Deploy a change
@@ -34,8 +34,8 @@ ssh root@187.77.3.104 'systemctl --user restart farscout.service'
 Code lives in git. Push to `main`, then on the VPS:
 
 ```bash
-ssh root@187.77.3.104 'set -e
-  cd /root/farscout
+ssh zaal@31.97.148.88 'set -e
+  cd /home/zaal/migrated-cowork/farscout
   git fetch -q origin && git checkout -q main && git pull -q --ff-only
   npm install --no-audit --no-fund   # only if deps changed
   node --test                        # VERIFY: must be green (Node 22)
@@ -48,7 +48,7 @@ ssh root@187.77.3.104 'set -e
 One-liner live-verify after any change:
 
 ```bash
-ssh root@187.77.3.104 'cd /root/farscout && git pull && node --test && systemctl --user restart farscout.service && sleep 6 && systemctl --user is-active farscout.service'
+ssh zaal@31.97.148.88 'cd /home/zaal/migrated-cowork/farscout && git pull && node --test && systemctl --user restart farscout.service && sleep 6 && systemctl --user is-active farscout.service'
 ```
 
 ## The systemd unit
@@ -62,7 +62,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/root/farscout
+WorkingDirectory=/home/zaal/migrated-cowork/farscout
 ExecStart=/usr/bin/env node index.js
 Restart=on-failure
 RestartSec=10
@@ -76,11 +76,11 @@ After editing the unit: `systemctl --user daemon-reload && systemctl --user rest
 
 ## Editing env on the VPS
 
-`.env` lives at `/root/farscout/.env` (gitignored, never committed). To add/rotate a value without it landing in your shell history or chat, pipe over stdin:
+`.env` lives at `/home/zaal/migrated-cowork/farscout/.env` (gitignored, never committed). To add/rotate a value without it landing in your shell history or chat, pipe over stdin:
 
 ```bash
-echo "OPENROUTER_API_KEY=sk-..." | ssh root@187.77.3.104 \
-  'cd /root/farscout && sed -i "/^OPENROUTER_API_KEY=/d" .env && cat >> .env && systemctl --user restart farscout.service'
+echo "OPENROUTER_API_KEY=sk-..." | ssh zaal@31.97.148.88 \
+  'cd /home/zaal/migrated-cowork/farscout && sed -i "/^OPENROUTER_API_KEY=/d" .env && cat >> .env && systemctl --user restart farscout.service'
 ```
 
 ## Health checks
@@ -90,7 +90,7 @@ echo "OPENROUTER_API_KEY=sk-..." | ssh root@187.77.3.104 \
 | Service up | `systemctl --user is-active farscout.service` | `active` |
 | Not crash-looping | `systemctl --user show farscout.service -p NRestarts --value` | low + stable |
 | Memory | `systemctl --user show farscout.service -p MemoryCurrent --value` | ~40MB |
-| Tests | `cd /root/farscout && node --test` | all pass |
+| Tests | `cd /home/zaal/migrated-cowork/farscout && node --test` | all pass |
 | Boot errors | `journalctl --user -u farscout.service --since "1 min ago" | grep -i error` | empty |
 
 ## Local run (mac)
@@ -119,7 +119,7 @@ Runs one research cycle and prints findings to the console. Good for testing eng
 Everything is in git. To revert to a prior known-good commit:
 
 ```bash
-ssh root@187.77.3.104 'cd /root/farscout && git checkout <good-sha> && systemctl --user restart farscout.service'
+ssh zaal@31.97.148.88 'cd /home/zaal/migrated-cowork/farscout && git checkout <good-sha> && systemctl --user restart farscout.service'
 # then fix forward on main and redeploy
 ```
 
