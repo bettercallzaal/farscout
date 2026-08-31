@@ -65,6 +65,6 @@ Exa key invalid (falls through), Jina rate-limited, and DuckDuckGo markup change
 ## When all else fails
 
 ```bash
-ssh root@187.77.3.104 'journalctl --user -u farscout.service -n 100 --no-pager'
+ssh zaal@31.97.148.88 'journalctl --user -u farscout.service -n 100 --no-pager'
 ```
 The stack trace usually names the module. Then read that module's section in `docs/API.md`.
