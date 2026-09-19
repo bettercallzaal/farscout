@@ -17,7 +17,7 @@ discord.js v14 bundles a version of `undici` that calls `util.deepClone`, which 
 The VPS runs Node 22, where everything is green. **Treat the VPS test run as the source of truth** for any discord-touching change:
 
 ```bash
-ssh root@187.77.3.104 'cd /root/farscout && node --test'
+ssh zaal@31.97.148.88 'cd /home/zaal/migrated-cowork/farscout && node --test'
 ```
 
 Pure-logic tests (research, triage, memory, enrich, util, http, brief, verify, search, reader, cadence) run fine on Node 23 too - only the `index.js`/`discord.js` import chain is affected. If you `nvm use 22` locally, the whole suite passes on the mac.
@@ -65,5 +65,5 @@ Unit tests don't hit real APIs. To verify a real integration:
 node --env-file=.env scripts/dryrun.js
 
 # the engine end-to-end on the VPS (real Warpcast + OpenRouter):
-ssh root@187.77.3.104 'cd /root/farscout && node --env-file=.env scripts/dryrun.js'
+ssh zaal@31.97.148.88 'cd /home/zaal/migrated-cowork/farscout && node --env-file=.env scripts/dryrun.js'
 ```
